@@ -1,3 +1,6 @@
+import sys
+sys.path.append("/Users/mrgr/Documents/GitHub/KiDS_astronomaly/")
+
 from flask import Flask, render_template, request, Response
 import json
 from os.path import join
@@ -181,6 +184,26 @@ def retrain():
     return json.dumps(res)
 
 
+@app.route('/checkFits', methods=["GET", "POST"])
+def check_fits():
+    """
+    Checks if we're using fits files to decide whether or not to display the
+    open viewer button
+    """
+    res = controller.check_if_fits_file()
+    return json.dumps(res)
+
+
+@app.route('/openViewer', methods=["GET", "POST"])
+def open_viewer():
+    """
+    Runs the local fits viewer (such as ds9)
+    """
+    idx = request.get_json()
+    res = controller.open_local_fits_viewer(idx)
+    return json.dumps(res)
+
+
 @app.route('/deletelabels', methods=["GET", "POST"])
 def delete_labels():
     """
@@ -196,11 +219,14 @@ def sort_data():
     Sorts the data by a requested column
     """
     if request.method == "POST":
-        column = (str)(request.get_json())
+        args = request.get_json()
+        column = (str)(args[0])
+        show_unlabelled_first = args[1]
+
         if column == "random":
-            controller.randomise_ml_scores()
+            controller.randomise_ml_scores(show_unlabelled_first)
         else:
-            controller.sort_ml_scores(column)
+            controller.sort_ml_scores(column, show_unlabelled_first)
         return json.dumps("success")
 
 

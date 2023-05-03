@@ -199,6 +199,9 @@ class PipelineStage(object):
         same data. This can allow a much faster user experience avoiding
         rerunning functions unnecessarily.
 
+        Warning - all columns in data not 'human_label' or 'score' are assumed
+        to be features.
+
         Parameters
         ----------
         data : pd.DataFrame
@@ -290,6 +293,17 @@ class PipelineStage(object):
                 if n % 100 == 0:
                     print(n, 'instances completed')
                 input_instance = dataset.get_sample(i)
+
+                # Drop any object that's all zeros or all NaNs since it
+                # contains no data
+                try:
+                    all_same = np.all(input_instance == input_instance[0])
+                    all_nan = np.all(np.isnan(input_instance))
+                except KeyError:  # This is a dataframe not an array
+                    all_same = np.all(input_instance == input_instance.iloc[0])
+                    all_nan = np.all(pd.isna(input_instance))
+                if all_same or all_nan:
+                    input_instance = None
 
                 if input_instance is None:
                     none_msg = "Input sample is None, skipping sample"

@@ -2,6 +2,7 @@ import numpy as np
 from skimage.transform import resize
 import cv2
 from astropy.stats import sigma_clipped_stats
+from astropy.visualization import ZScaleInterval
 
 
 def image_transform_log(img):
@@ -204,18 +205,20 @@ def image_transform_sigma_clipping(img, sigma=3, central=True):
     """
 
     if len(img.shape) > 2:
-        im = img[:, :, 0]
+        im = img[:, :, 0] #it uses only one channel
+        #print('one channel')
     else:
+        #print('ok')
         im = img
 
     im = np.nan_to_num(im)  # OpenCV can't handle NaNs
-
+    #print(np.shape(im))
     mean, median, std = sigma_clipped_stats(im, sigma=sigma)
     thresh = std + median
     img_bin = np.zeros(im.shape, dtype=np.uint8)
 
     img_bin[im <= thresh] = 0
-    img_bin[im > thresh] = 1
+    img_bin[im > thresh] = 12
 
     contours, hierarchy = cv2.findContours(img_bin,
                                            cv2.RETR_EXTERNAL,
@@ -442,3 +445,39 @@ def image_transform_axis_shift(img):
     img = np.moveaxis(img, img_channel, -1)
 
     return img
+
+
+def image_transform_zscale(img, contrast=0.05):
+    """
+    Implements zscaling used in IRAF and DS9. Essentially just truncates the 
+    brightness histogram at sensibly chosen minima and maxima.
+
+    Parameters
+    ----------
+    img : np.ndarray
+        Input image
+    contrast : float, optional
+        Essentially tweaks the values of z1 and z2 to be more or less 
+        restrictive in the brightness distribution. 0.05 works quite well for
+        MeerKAT images.
+
+    Returns
+    -------
+    np.ndarray
+        Shifted image
+
+    """
+    img = np.nan_to_num(img)
+    zscale = ZScaleInterval(contrast=contrast)
+    z1, z2 = zscale.get_limits(img)
+    adj_img_arr = img.copy()
+    adj_img_arr[adj_img_arr < z1] = z1
+    adj_img_arr[adj_img_arr > z2] = z2
+    return adj_img_arr
+
+
+
+def image_get_first_band(img):
+
+    
+    return img[:,:,0]

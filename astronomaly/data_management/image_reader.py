@@ -11,12 +11,42 @@ import cv2
 from astronomaly.base.base_dataset import Dataset
 from astronomaly.base import logging_tools
 from astronomaly.utils import utils
+import filek.make_rgb as make_rgb
 mpl.use('Agg')
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas  # noqa: E402, E501
 import matplotlib.pyplot as plt  # noqa: E402
+from astronomaly.preprocessing import image_preprocessing
+
+def change_specialcharacters(string):
+    return string.replace('KIDS', 'KiDS_DR4.0').replace('.', 'p').replace('-', 'm').rstrip(' ')
 
 
-def convert_array_to_image(arr, plot_cmap='hot'):
+def from_fits_to_array(folder_path, img_ID, tile_ID, channels=['r','i','g'] ):
+
+    img=[]
+
+    tile_ID = change_specialcharacters(tile_ID)
+    if len(channels)==1:
+        channels=[channels]
+    for f in channels:
+        try:
+            hdu = fits.getdata(os.path.join(folder_path,f+'_band','tile_'+tile_ID, img_ID+'.fits' ),
+                                memmap=True)
+        except FileNotFoundError:
+            try:
+                hdu = fits.getdata(os.path.join(folder_path,f+'_band',tile_ID, img_ID+'.fits') ,
+                                memmap=True)
+            except:
+                print(tile_ID,img_ID)
+                continue
+                
+        img.append(hdu)
+    #wcs = WCS(hdu.header)
+        #print(img)
+
+    return np.array(img)
+
+def convert_array_to_image(arr, plot_cmap=None, interpolation='bicubic'):
     """
     Function to convert an array to a png image ready to be served on a web
     page.
@@ -25,6 +55,10 @@ def convert_array_to_image(arr, plot_cmap='hot'):
     ----------
     arr : np.ndarray
         Input image
+    plot_cmap : str, optional
+        Which colourmap to use
+    interpolation : str, optional
+        Allows interpolation so low res images don't look so blocky
 
     Returns
     -------
@@ -32,14 +66,41 @@ def convert_array_to_image(arr, plot_cmap='hot'):
         Object ready to be passed directly to the frontend
     """
     with mpl.rc_context({'backend': 'Agg'}):
-        fig = plt.figure(figsize=(1, 1), dpi=4 * arr.shape[1])
-        ax = plt.Axes(fig, [0., 0., 1., 1.])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        plt.imshow(arr, cmap=plot_cmap, origin='lower')
-        output = io.BytesIO()
-        FigureCanvas(fig).print_png(output)
-        plt.close(fig)
+        print(arr.shape)
+        if len(arr.shape)==2:
+            # if greyscale plot just that
+            fig = plt.figure(figsize=(1, 1), dpi=4 * arr.shape[1])
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            plt.imshow(arr, cmap='gray', origin='lower',
+                    interpolation=interpolation)
+            output = io.BytesIO()
+            FigureCanvas(fig).print_png(output)
+            plt.close(fig)
+        else:
+            #if 3 bands plot r band and rgb
+            fig = plt.figure(figsize=(1, 1), dpi=6 * arr.shape[1])
+            ax1 = fig.add_subplot(1, 2, 1)
+            #r band #np.rot90(arr[:,:,0]),
+            ax1.imshow(arr[:,:,0], 
+                       cmap=plot_cmap, origin='lower', interpolation=interpolation)
+            ax1.set_axis_off()
+            ax2 = fig.add_subplot(1, 2, 2)
+            #rgb
+            #ax2.imshow(make_rgb.make_rgb_one_image(arr),
+                      # cmap=plot_cmap, origin='lower', interpolation=interpolation)
+            ax2.imshow(make_rgb.make_rgb_one_image(arr),
+                       cmap=plot_cmap, origin='lower', interpolation=interpolation)
+            np.save('/Users/mrgr/Documents/GitHub/KiDS_astronomaly/rgb.npy',make_rgb.make_rgb_one_image(arr))
+            #print(np.shape(make_rgb.make_rgb_one_image(arr)))
+            ax2.set_axis_off()
+            output = io.BytesIO()
+            FigureCanvas(fig).print_png(output)
+            plt.close(fig)
+
+
+
     return output
 
 
@@ -221,11 +282,15 @@ class AstroImage:
 
 
 class ImageDataset(Dataset):
-    def __init__(self, fits_index=None, window_size=128, window_shift=None,
-                 display_image_size=128, band_prefixes=[], bands_rgb={},
+    def __init__(self, fits_index=None, window_size=101, window_shift=None,
+                 display_image_size=None, adaptive_sizing=False,
+                 min_window_size=100,
+                 band_prefixes=[], bands_rgb={},
                  transform_function=None, display_transform_function=None,
                  plot_square=False, catalogue=None,
-                 plot_cmap='hot', **kwargs):
+                 plot_cmap='hot', 
+                 display_interpolation=None,
+                 **kwargs):
         """
         Read in a set of images either from a directory or from a list of file
         paths (absolute). Inherits from Dataset class.
@@ -258,10 +323,30 @@ class ImageDataset(Dataset):
             set for an autoencoder. If an integer is provided, the shift will 
             be the same in both directions. Otherwise a list of
             [window_shift_x, window_shift_y] is expected.
-        display_image_size : The size of the image to be displayed on the
+        display_image_size : None or int
+            The size of the image to be displayed on the
             web page. If the image is smaller than this, it will be
             interpolated up to the higher number of pixels. If larger, it will
-            be downsampled.
+            be downsampled. If None, will default to the existing width of the
+            image.
+        display_interpolation : None or str
+            Passed to matplotlib imshow. If you are displaying images at a 
+            similar size to their native resolution interpolation isn't usually
+            necessary. But if they are being upsampled with a larger 
+            display_image_size, 'bicubic' will allow for a smoother looking 
+            image.
+        adaptive_sizing : Boolean, optional
+            Allows the size of the window to be adapted based on the size of 
+            the object. Requires an "obj_size" column in the catalogue. This 
+            should be the desired window width in pixels. Note that a minimum
+            window size can also be provided to provide a lower limit for the
+            adaptive sizing. We currently only support a single number for
+            the size so all cutouts will be square. The different sized images 
+            will be resized into window_size.
+        min_window_size : int, optional
+            When used with adapative_sizing, this provides a lower limit for
+            the window size (to avoid tiny sources made of very few pixels 
+            being blown up). Default is 128 pixels, set to 0 to allow all sizes
         band_prefixes : list
             Allows you to specify a prefix for an image which corresponds to a
             band identifier. This has to be a prefix and the rest of the image
@@ -288,16 +373,22 @@ class ImageDataset(Dataset):
             the original cutout when the image is displayed in the webapp.
         plot_cmap : str, optional
             The colormap with which to plot the image
+        interpolation : str, optional
+            Allows interpolation in the display image so low res images don't
+            look so blocky
         """
 
         super().__init__(fits_index=fits_index, window_size=window_size,
                          window_shift=window_shift,
                          display_image_size=display_image_size,
+                         adaptive_sizing=adaptive_sizing,
+                         min_window_size=min_window_size,
                          band_prefixes=band_prefixes, bands_rgb=bands_rgb,
                          transform_function=transform_function,
                          display_transform_function=display_transform_function,
                          plot_square=plot_square, catalogue=catalogue,
                          plot_cmap=plot_cmap,
+                         display_interpolation=display_interpolation,
                          **kwargs)
         self.known_file_types = ['fits', 'fits.fz', 'fits.gz',
                                  'FITS', 'FITS.fz', 'FITS.gz']
@@ -388,6 +479,22 @@ class ImageDataset(Dataset):
             self.window_shift_x = self.window_size_x
             self.window_shift_y = self.window_size_y
 
+        if adaptive_sizing:
+            err = False
+            if catalogue is None:
+                err = True
+            else:
+                if 'obj_size' not in catalogue.columns:
+                    err = True
+            if err:
+                err_msg = ("To use adaptive sizing, a catalogue must be "
+                           "provided with a 'obj_size' column.")
+                logging_tools.log(err_msg, level='ERROR')
+                raise(ValueError(err_msg))
+
+        self.adaptive_sizing = adaptive_sizing
+        self.min_window_size = min_window_size
+
         self.images = images
         self.transform_function = transform_function
         if display_transform_function is None:
@@ -397,6 +504,7 @@ class ImageDataset(Dataset):
 
         self.plot_square = plot_square
         self.plot_cmap = plot_cmap
+        self.display_interpolation = display_interpolation
         self.catalogue = catalogue
         self.display_image_size = display_image_size
         self.band_prefixes = band_prefixes
@@ -500,6 +608,8 @@ class ImageDataset(Dataset):
             cols.append('dec')
         if 'peak_flux' in self.catalogue.columns:
             cols.append('peak_flux')
+        if 'obj_size' in self.catalogue.columns:
+            cols.append('obj_size')
 
         met = {}
         for c in cols:
@@ -530,8 +640,15 @@ class ImageDataset(Dataset):
         original_image = self.metadata.loc[idx, 'original_image']
         this_image = self.images[original_image]
 
-        x_wid = self.window_size_x // 2
-        y_wid = self.window_size_y // 2
+        if self.adaptive_sizing:
+            wid = self.metadata.loc[idx, 'obj_size']
+            if wid < self.min_window_size:
+                wid = self.min_window_size
+            x_wid = wid // 2
+            y_wid = wid // 2
+        else:
+            x_wid = self.window_size_x // 2
+            y_wid = self.window_size_y // 2
 
         y_start = y0 - y_wid
         y_end = y0 + y_wid
@@ -551,6 +668,11 @@ class ImageDataset(Dataset):
             cutout = np.ones((shp)) * np.nan
         else:
             cutout = this_image.get_image_data(y_start, y_end, x_start, x_end)
+
+        if self.adaptive_sizing:
+            new_shape = (self.window_size_x, self.window_size_y)
+            cutout = resize(cutout, new_shape, anti_aliasing=False)
+
         if self.metadata.loc[idx, 'peak_flux'] == -1:
             if np.any(np.isnan(cutout)):
                 flx = -1
@@ -585,19 +707,29 @@ class ImageDataset(Dataset):
         x0 = self.metadata.loc[idx, 'x']
         y0 = self.metadata.loc[idx, 'y']
 
+        if self.adaptive_sizing:
+            sz = self.metadata.loc[idx, 'obj_size']
+            if sz < self.min_window_size:
+                sz = self.min_window_size
+            this_window_size_x = sz
+            this_window_size_y = sz
+        else:
+            this_window_size_x = self.window_size_x
+            this_window_size_y = self.window_size_y
+
         factor = 1.5
-        xmin = (int)(x0 - self.window_size_x * factor)
-        xmax = (int)(x0 + self.window_size_x * factor)
-        ymin = (int)(y0 - self.window_size_y * factor)
-        ymax = (int)(y0 + self.window_size_y * factor)
+        xmin = (int)(x0 - this_window_size_x * factor)
+        xmax = (int)(x0 + this_window_size_x * factor)
+        ymin = (int)(y0 - this_window_size_y * factor)
+        ymax = (int)(y0 + this_window_size_y * factor)
 
         xstart = max(xmin, 0)
         xend = min(xmax, this_image.metadata['NAXIS1'])
 
         ystart = max(ymin, 0)
         yend = min(ymax, this_image.metadata['NAXIS2'])
-        tot_size_x = int(2 * self.window_size_x * factor)
-        tot_size_y = int(2 * self.window_size_y * factor)
+        tot_size_x = int(2 * this_window_size_x * factor)
+        tot_size_y = int(2 * this_window_size_y * factor)
 
         naxis3_present = 'NAXIS3' in this_image.metadata.keys()
 
@@ -629,8 +761,8 @@ class ImageDataset(Dataset):
             cutout = new_cutout
 
         if self.plot_square:
-            offset_x = (tot_size_x - self.window_size_x) // 2
-            offset_y = (tot_size_y - self.window_size_y) // 2
+            offset_x = (tot_size_x - this_window_size_x) // 2
+            offset_y = (tot_size_y - this_window_size_y) // 2
             x1 = offset_x
             x2 = tot_size_x - offset_x
             y1 = offset_y
@@ -644,6 +776,10 @@ class ImageDataset(Dataset):
 
         min_edge = min(cutout.shape[:2])
         max_edge = max(cutout.shape[:2])
+
+        if self.display_image_size is None:
+            self.display_image_size = max(cutout.shape)
+
         if max_edge != self.display_image_size:
             new_max = self.display_image_size
             new_min = int(min_edge * new_max / max_edge)
@@ -653,16 +789,19 @@ class ImageDataset(Dataset):
                 new_shape = [new_max, new_min]
             if len(cutout.shape) > 2:
                 new_shape.append(cutout.shape[-1])
-            cutout = resize(cutout, new_shape, anti_aliasing=False)
+            cutout = resize(cutout, new_shape, anti_aliasing=True)
 
-        return convert_array_to_image(cutout, plot_cmap=self.plot_cmap)
+        return convert_array_to_image(cutout, plot_cmap=self.plot_cmap,
+                                      interpolation=self.display_interpolation)
 
 
 class ImageThumbnailsDataset(Dataset):
-    def __init__(self, display_image_size=128, transform_function=None,
+    def __init__(self, display_image_size=None, display_interpolation=None, 
+                 transform_function=None,
                  display_transform_function=None, fits_format=False,
                  catalogue=None, check_corrupt_data=False,
-                 additional_metadata=None, **kwargs):
+                 additional_metadata=None, df_kids=None, type_plot_display=None,
+                **kwargs):
         """
         Read in a set of images that have already been cut into thumbnails. 
         This would be uncommon with astronomical data but is needed to read a 
@@ -681,10 +820,18 @@ class ImageThumbnailsDataset(Dataset):
             explicitly given.
         output_dir : str
             The directory to save the log file and all outputs to. Defaults to
-        display_image_size : The size of the image to be displayed on the
+        display_image_size : None or int
+            The size of the image to be displayed on the
             web page. If the image is smaller than this, it will be
             interpolated up to the higher number of pixels. If larger, it will
-            be downsampled.
+            be downsampled. If None, will default to the existing width of the
+            image.
+        display_interpolation : None or str
+            Passed to matplotlib imshow. If you are displaying images at a 
+            similar size to their native resolution interpolation isn't usually
+            necessary. But if they are being upsampled with a larger 
+            display_image_size, 'bicubic' will allow for a smoother looking 
+            image.
         transform_function : function or list, optional
             The transformation function or list of functions that will be 
             applied to each cutout. The function should take an input 2d array 
@@ -701,11 +848,15 @@ class ImageThumbnailsDataset(Dataset):
         """
 
         super().__init__(transform_function=transform_function,
-                         display_image_size=128, catalogue=catalogue,
+                         display_image_size=display_image_size, 
+                         display_interpolation=display_interpolation,
+                         catalogue=catalogue,
                          fits_format=fits_format,
                          check_corrupt_data=check_corrupt_data,
                          display_transform_function=display_transform_function,
                          additional_metadata=additional_metadata,
+                         df_kids= df_kids, 
+                         type_plot_display = type_plot_display,
                          **kwargs)
 
         self.data_type = 'image'
@@ -722,28 +873,79 @@ class ImageThumbnailsDataset(Dataset):
         else:
             self.display_transform_function = display_transform_function
 
-        self.display_image_size = display_image_size
-        self.fits_format = fits_format
+        if df_kids is not None:
+            is_kids = True
+        else:
+            is_kids = False
 
-        if catalogue is not None:
+        self.display_image_size = display_image_size
+        self.display_interpolation = display_interpolation
+        self.fits_format = fits_format
+        self.is_kids = is_kids
+        self.type_plot_display =  type_plot_display 
+       
+
+        if catalogue is not None and is_kids==False:
             if 'objid' in catalogue.columns:
                 catalogue.set_index('objid')
                 catalogue.index = catalogue.index.astype(
                     str) + '_' + catalogue.groupby(
                         level=0).cumcount().astype(str)
             self.metadata = catalogue
-        else:
+        elif catalogue is None and is_kids==False:
             inds = []
             file_paths = []
+           
             for f in self.files:
                 extension = f.split('.')[-1]
                 if extension in self.known_file_types:
                     inds.append(
                         f.split(os.path.sep)[-1][:-(len(extension) + 1)])
                     file_paths.append(f)
-            self.metadata = pd.DataFrame(index=inds,
-                                         data={'filename': file_paths})
+                self.metadata = pd.DataFrame(index=inds,
+                                        data={'filename': file_paths})
+        elif is_kids==True:
+            '''
+            if 'df_list_obj' in kwargs:
+                df_list_obj = kwargs['df_list_obj']
+            else: 
+                raise ValueError('Dataframe with objects (ID and KIDS_TILE) needed')
+            '''
+            if 'ID' not in df_kids.columns and 'KIDS_TILE' in df_kids.columns :
+                df_kids.rename(columns={"ID": "KIDS_ID"}, inplace=True)
+            elif 'KIDS_ID' in df_kids.columns and 'KIDS_TILE'in df_kids.columns:
+                pass
+            else:
+                raise ValueError('Dataframe with columns ID or KIDS_ID and KIDS_TILE needed')
+            
+            #if 'list_of_files' not in df_list_obj.columns:
+            #    raise ValueError('Dataframe with images path needed (list_of_files column)')
 
+            if 'FOLDER' not in df_kids.columns:
+                raise ValueError('Dataframe with images path needed (FOLDER column)')
+
+            #file_paths = df_kids['FOLDER'].values
+
+            ##label from transformer encoder
+            if 'LABEL_TE' in  df_kids.columns:
+                pass
+            else:
+                df_kids['LABEL_TE'] = np.ones(len(df_kids))*-1
+
+            #label from active learning
+            if 'LABEL_AL' in  df_kids.columns:
+                pass
+            else:
+                df_kids['LABEL_AL'] = np.ones(len(df_kids))*-1
+            
+            inds =  df_kids['KIDS_ID'].values
+            df_kids['filename'] = [tile +'__'+ id for id,tile in 
+                        zip(df_kids['KIDS_ID'].values,df_kids['KIDS_TILE'].values)]
+    
+            df_kids = df_kids.drop_duplicates(subset='KIDS_ID').reset_index(drop=True)
+            self.metadata = df_kids.set_index(inds)
+            #df_kids.to_csv(os.path.join('/Users/mrgr/Documents/GitHub/KiDS_astronomaly/example_data/KiDS_cutouts','aa.csv'), index=False)
+                
         self.index = self.metadata.index.values
 
         if additional_metadata is not None:
@@ -764,10 +966,12 @@ class ImageThumbnailsDataset(Dataset):
             Array of image cutout
         """
 
-        if self.fits_format:
+        if self.fits_format and not self.is_kids:
             try:
                 filename = self.metadata.loc[idx, 'filename']
                 img = fits.getdata(filename, memmap=True)
+                #print(np.shape(img))
+                #print(type(img))
                 return apply_transform(img, self.transform_function)
 
             except TypeError:
@@ -790,11 +994,24 @@ class ImageThumbnailsDataset(Dataset):
                 else:
                     print('Missing data: Enable check_corrupt_data.')
 
+        elif self.fits_format and self.is_kids:
+            try:    
+                img = from_fits_to_array(self.metadata.loc[idx, 'FOLDER'],
+                            self.metadata.loc[idx,'KIDS_ID'] ,self.metadata.loc[idx, 'KIDS_TILE'],  
+                            channels=['r', 'i','g'])
+                img = np.transpose(img, (1,2,0)) 
+                #img = image_preprocessing.image_transform_greyscale(img) 
+                #print('load',np.shape(apply_transform(img.copy(), self.transform_function)))       
+                return apply_transform(img.copy(), self.transform_function)
+            
+            except FileNotFoundError:
+                print('File not found')
+
         else:
             filename = self.metadata.loc[idx, 'filename']
             img = cv2.imread(filename)
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-
+            img = cv2.cvtColor(img)#, cv2.COLOR_BGR2RGB)
+            
             return apply_transform(img, self.transform_function)
 
     def get_display_data(self, idx):
@@ -812,41 +1029,75 @@ class ImageThumbnailsDataset(Dataset):
         png image object
             Object ready to be passed directly to the frontend
         """
-
+       
         if self.fits_format:
-            try:
-                filename = self.metadata.loc[idx, 'filename']
-                cutout = fits.getdata(filename, memmap=True)
+            if not self.is_kids:
+                try:
+                    filename = self.metadata.loc[idx, 'filename']
+                    cutout = fits.getdata(filename, memmap=True)
 
-            except TypeError:
-                msg = "TypeError cannot read image: Corrupted file"
-                logging_tools.log(msg, level="ERROR")
+                except TypeError:
+                    msg = "TypeError cannot read image: Corrupted file"
+                    logging_tools.log(msg, level="ERROR")
 
-                if self.check_corrupt_data:
-                    cutout = np.zeros(
-                        [1, self.display_image_size, self.display_image_size], dtype=int)
-                else:
-                    print('Corrupted data: Enable check_corrupt_data.')
+                    if self.check_corrupt_data:
+                        sz = self.display_image_size
+                        if sz is None:
+                            sz = 256  # Just set to a sensible default
+                        cutout = np.zeros([1, sz, sz], dtype=int)
+                    else:
+                        print('Corrupted data: Enable check_corrupt_data.')
 
-            except OSError:
-                msg = "OSError cannot read image: Empty file"
-                logging_tools.log(msg, level="ERROR")
+                except OSError:
+                    msg = "OSError cannot read image: Empty file"
+                    logging_tools.log(msg, level="ERROR")
 
-                if self.check_corrupt_data:
-                    cutout = np.zeros(
-                        [1, self.display_image_size, self.display_image_size], dtype=int)
-                else:
-                    print('Missing data: Enable check_corrupt_data.')
-
+                    if self.check_corrupt_data:
+                        sz = self.display_image_size
+                        if sz is None:
+                            sz = 256  # Just set to a sensible default
+                        cutout = np.zeros([1, sz, sz], dtype=int)
+                    else:
+                        print('Missing data: Enable check_corrupt_data.')
+            else:
+                    #is img from kids, load it the correct  way 
+                    img = from_fits_to_array(self.metadata.loc[idx, 'FOLDER'],
+                                self.metadata.loc[idx, 'KIDS_ID'] ,self.metadata.loc[idx, 'KIDS_TILE'],  
+                                channels=['r', 'i','g'])
+                    cutout = np.transpose(img.copy(), (1,2,0))
+                    #print(np.shape(cutout))
+                    #print( self.make_rgb)
+                    #if self.make_rgb:
+                        #cutout = np.transpose(img.copy(), (1,2,0))
+                    #    pass
+                    #elif self.make_rgb==False:
+                    #    cutout = cutout[:,:,0]
+                    #elif self.make_rgb=='grey':
+                    #    #print('grey')
+                    #    cutout = image_preprocessing.image_transform_greyscale(cutout)
+                    #else:
+                    #    print('i dont know how to plot')
+            
         else:
+            print('else')
             filename = self.metadata.loc[idx, 'filename']
             cutout = cv2.imread(filename)
             cutout = cv2.cvtColor(cutout, cv2.COLOR_BGR2RGB)
+            # Because we're usually working with data in numpy arrays and 
+            # not normally png images, we need to flip them to align with
+            # how Astronomaly displays them in the front end
+            cutout = np.flip(cutout, axis=0)
 
         cutout = apply_transform(cutout, self.display_transform_function)
+        # print('dis',np.shape(cutout))
+
+        if self.display_image_size is None:
+            self.display_image_size = max((cutout.shape[0], cutout.shape[1]))
 
         min_edge = min(cutout.shape[:2])
         max_edge = max(cutout.shape[:2])
+
+
         if max_edge != self.display_image_size:
             new_max = self.display_image_size
             new_min = int(min_edge * new_max / max_edge)
@@ -854,11 +1105,12 @@ class ImageThumbnailsDataset(Dataset):
                 new_shape = [new_min, new_max]
             else:
                 new_shape = [new_max, new_min]
-            if len(cutout.shape) > 2:
+            if len(cutout.shape) > 2:  
                 new_shape.append(cutout.shape[-1])
-            cutout = resize(cutout, new_shape, anti_aliasing=False)
+            cutout = resize(cutout, new_shape, anti_aliasing=True)
 
-        return convert_array_to_image(cutout)
+        return convert_array_to_image(cutout, 
+                                      interpolation=self.display_interpolation)
 
     def fits_to_png(self, scores):
         """
@@ -902,5 +1154,6 @@ class ImageThumbnailsDataset(Dataset):
                 transformed_image = apply_transform(
                     data, self.display_transform_function)
 
-            plt.imsave(output_path+'/AS:'+'%.6s' % scores.score[i]+'_NAME:'+str(
-                idx)+'_FLUX:'+'%.4s' % flux+'.png', transformed_image)
+            plt.imsave(output_path + '/AS:' + '%.6s' % scores.score[i] + 
+                       '_NAME:' + str(idx) + 
+                       '_FLUX:' + '%.4s' % flux + '.png', transformed_image)

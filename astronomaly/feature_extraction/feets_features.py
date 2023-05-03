@@ -85,10 +85,10 @@ class Feets_Features(PipelineStage):
                 logging_tools.log(msg, level='WARNING')
 
             if self.compute_on_mags is True and 'mag' in lc_data.columns:
-                standard_lc_columns = ['time', 'mag', 'mag_error']
+                standard_lc_columns = ['time', 'mag', 'mag_err']
 
             else:
-                standard_lc_columns = ['time', 'flux', 'flux_error']
+                standard_lc_columns = ['time', 'flux', 'flux_err']
 
             current_lc_columns = [cl for cl in standard_lc_columns
                                   if cl in lc_data.columns]
@@ -101,7 +101,7 @@ class Feets_Features(PipelineStage):
                 if cl == 'mag' or cl == 'flux':
                     available_columns.append('magnitude')
 
-                if cl == 'mag_error' or cl == 'flux_error':
+                if cl == 'mag_err' or cl == 'flux_err':
                     available_columns.append('error')
 
             # Creates the feature extractor
@@ -115,7 +115,7 @@ class Feets_Features(PipelineStage):
             if 'filters' in lc_data.columns:
                 ft_values = []
                 ft_labels = []
-                for i in range(0, 6):
+                for i in np.unique(lc_data.filters):
                     passbands = self.filter_labels
                     filter_lc = lc_data[lc_data['filters'] == i]
 
@@ -123,8 +123,10 @@ class Feets_Features(PipelineStage):
                     for col in current_lc_columns:
                         lc_columns.append(filter_lc[col])
 
+                    empty_flux = lc_columns[1].sum() == 0
                     # Accounts for light curves that do not have some filters
-                    if len(filter_lc.ID) != 0:
+                    # or all flux/mag values are zero
+                    if len(filter_lc.ID) != 0 and not empty_flux:
                         # Checking the number of points in the light curve
                         if len(filter_lc.ID) >= 5:
                             features, values = fs.extract(*lc_columns)

@@ -1,7 +1,7 @@
 # An example with a subset of Galaxy Zoo data
 from astronomaly.data_management import image_reader
 from astronomaly.preprocessing import image_preprocessing
-from astronomaly.feature_extraction import shape_features
+from astronomaly.feature_extraction import shape_features, pretrained_cnn
 from astronomaly.postprocessing import scaling
 from astronomaly.anomaly_detection import isolation_forest, human_loop_learning
 from astronomaly.visualisation import umap_plot
@@ -67,17 +67,22 @@ def run_pipeline():
     image_dataset = image_reader.ImageThumbnailsDataset(
         directory=image_dir, output_dir=output_dir, 
         transform_function=image_transform_function,
-        display_transform_function=display_transform_function
+        display_transform_function=display_transform_function,
+        display_image_size=424
     )
-
+    '''
     # Creates a pipeline object for feature extraction
     pipeline_ellipse = shape_features.EllipseFitFeatures(
         percentiles=[90, 80, 70, 60, 50, 0],
         output_dir=output_dir, channel=0, force_rerun=False, 
         central_contour=False)
 
-    # Actually runs the feature extraction
     features = pipeline_ellipse.run_on_dataset(image_dataset)
+    '''
+    cnn =  pretrained_cnn.CNN_Features ()
+
+    # Actually runs the feature extraction
+    features = cnn.run_on_dataset(image_dataset)
 
     # Now we rescale the features using the same procedure of first creating
     # the pipeline object, then running it on the feature set

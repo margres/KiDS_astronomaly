@@ -8,6 +8,9 @@ import TextField from '@material-ui/core/TextField';
 import Select from '@material-ui/core/Select';
 import FormHelperText from '@material-ui/core/FormHelperText';
 import FormControl from '@material-ui/core/FormControl';
+import Switch from '@material-ui/core/Switch';
+import FormGroup from '@material-ui/core/FormGroup';
+import FormControlLabel from '@material-ui/core/FormControlLabel';
 import { MenuItem } from '@material-ui/core';
 import {ObjectDisplayer} from './ObjectDisplayer.js';
 import {PlotContainer} from './PlotContainer.js'
@@ -37,7 +40,10 @@ export class AnomalyTab extends React.Component {
     this.handleKeyDown = this.handleKeyDown.bind(this);
     this.handleSortBy = this.handleSortBy.bind(this);
     this.changeSortBy = this.changeSortBy.bind(this);
+    this.handleUnlabelledSwitch = this.handleUnlabelledSwitch.bind(this);
+    this.getAvailableColumns = this.getAvailableColumns.bind(this);
     this.handleRetrainButton = this.handleRetrainButton.bind(this);
+    this.handleViewerButton = this.handleViewerButton.bind(this);
     this.handleDeleteLabelsButton = this.handleDeleteLabelsButton.bind(this);
     this.handleDialogClose = this.handleDialogClose.bind(this);
     this.handleScoreButtonClick = this.handleScoreButtonClick.bind(this);
@@ -65,13 +71,16 @@ export class AnomalyTab extends React.Component {
                  metadata:{},
                  search_cds:'',
                  search_das:'',
+                 using_fits:false,
                  button_colors:{"0": "primary",
                                 "1": "primary",
                                 "2": "primary",
                                 "3": "primary",
                                 "4": "primary",
                                 "5": "primary"},
+                 available_columns:{},
                  sortby:"score",
+                 unlabelled_first: false,
                  training: false,
                  dialog_open: false};
     
@@ -164,7 +173,13 @@ export class AnomalyTab extends React.Component {
   handleSortBy(e){
     const sortByColumn = e.target.value;
     this.setState({sortby:sortByColumn});
-    this.changeSortBy(sortByColumn);
+    this.changeSortBy(sortByColumn, this.state.unlabelled_first);
+  }
+
+  handleUnlabelledSwitch(e){
+    const unlabelled_first = e.target.checked;
+    this.setState({unlabelled_first:unlabelled_first});
+    this.changeSortBy(this.state.sortby, unlabelled_first);
   }
 
   handleRetrainButton(e) {
@@ -180,12 +195,40 @@ export class AnomalyTab extends React.Component {
     .then((res) => {
       if (res == "success") {
         this.setState({sortby:"trained_score", training:false});
+        this.getAvailableColumns();
         this.changeSortBy("trained_score")
       }
       else {
         this.setState({training:false})
       }
     })
+    .catch(console.log)
+  }
+
+  checkFitsFile(e) {
+    fetch("/checkFits", {
+      method: 'POST',
+      headers: {
+          'Content-Type': 'application/json'
+      },
+      body: JSON.stringify("")
+    })
+    .then(res => res.json())
+    .then((res) => {
+      this.setState({using_fits:res});
+    })
+    .catch(console.log)
+  }
+
+  handleViewerButton(e) {
+    fetch("/openViewer", {
+      method: 'POST',
+      headers: {
+          'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(this.state.original_id)
+    })
+    .then((res) => {return res.json()})
     .catch(console.log)
   }
 
@@ -250,17 +293,35 @@ export class AnomalyTab extends React.Component {
   }
 
   /**
+   * Gets available columns to sort the data by
+   */
+  getAvailableColumns(){
+    fetch("/getColumns", {
+      method: 'POST',
+      headers: {
+          'Content-Type': 'application/json'
+      },
+      body: JSON.stringify("")
+    })
+    .then(res => res.json())
+    .then((res) => {
+      this.setState({available_columns:res});
+    })
+    .catch(console.log)
+  }
+  /**
    * Tells the backend to reorder the data according to a different scoring 
    * method
    * @param {string} columnName
    */
-  changeSortBy(columnName){
+  changeSortBy(columnName, unlabelled_first){
+    let args = [columnName, unlabelled_first];
     fetch("/sort", {
       method: 'POST',
       headers: {
           'Content-Type': 'application/json'
       },
-      body: JSON.stringify(columnName)
+      body: JSON.stringify(args)
     })
     .then(res => res.json())
     .then((data) => {
@@ -355,7 +416,7 @@ export class AnomalyTab extends React.Component {
         let search_cds = "http://cdsportal.u-strasbg.fr/?target=" + 
                   res.ra + '%2C' + res.dec
         let search_das = "https://das.datacentral.org.au/das?RA=" + 
-                  res.ra + '&DEC=' + res.dec +"&FOV=2.0&ERR=10.0"
+                  res.ra + '&DEC=' + res.dec +"&FOV=2.0&ERR=10.0&CAT=0"
         this.setState({search_cds:search_cds, search_das:search_das})
       }
     })
@@ -431,17 +492,34 @@ export class AnomalyTab extends React.Component {
     if (this.state.max_id == 0) {
       this.getMaxID();
     }
-    this.changeSortBy(this.state.sortby);
+    this.getAvailableColumns();
+    this.checkFitsFile();
+    this.changeSortBy(this.state.sortby, this.state.unlabelled_first);
   }
  
 
   render() {
-    // console.log('Anomaly')
-    // console.log(this.state.search_cds)
+      // Sort by menu
+      let menuItems = [];
+      let column_names = this.state.available_columns;
+      for (const [col, text] of Object.entries(column_names)) {
+          menuItems.push(<MenuItem key={col} value={col}>{text}</MenuItem>)
+      }
+      // Manually add the Random option
+      menuItems.push(<MenuItem key={'random'} value={'random'}>{"Random"}</MenuItem>)
+
+      let sort_by_form = 
+      <FormControl variant="outlined" fullWidth={true}     margin='dense'>
+          <Select id="select" onChange={this.handleSortBy} value={this.state.sortby}>
+            {menuItems}
+          </Select>
+        <FormHelperText>Scoring method to sort by</FormHelperText>
+      </FormControl>
+
       return(
               <Grid component='div' container spacing={3} onKeyDown={this.handleKeyDown} tabIndex="0">
                   <Grid item xs={12}></Grid>
-                  <Grid item container xs={8} justifyContent="center">
+                  <Grid item container xs={6} justifyContent="center" >
                       {/* <MakePlot plot={this.props.plot}/> */}
                       <Grid container spacing={3} alignItems="center">
                         <Grid item xs={12} align="center">
@@ -514,24 +592,29 @@ export class AnomalyTab extends React.Component {
                           {/* <Grid container alignItems="center"> */}
                             {/* <Grid item xs={1}>
                             </Grid> */}
-                            <Grid item xs={6}>
+                            <Grid item xs={4}>
                               <Grid container item xs={12} justifyContent="center">
                                 <Grid item xs={8}>
-                                <FormControl variant="outlined" fullWidth={true} margin='dense'>
-                                  {/* <InputLabel id="select-label" margin="dense">Sort By</InputLabel> */}
-                                  <Select id="select" onChange={this.handleSortBy} value={this.state.sortby}>
-                                    <MenuItem value="score">Raw anomaly score </MenuItem>
-                                    <MenuItem value="trained_score">Human retrained score</MenuItem>
-                                    <MenuItem value="random">Random</MenuItem>
-                                  </Select>
-                                  <FormHelperText>Scoring method to sort by</FormHelperText>
-                                </FormControl>
+                                  {sort_by_form}
                                 </Grid>
                                 <Grid item xs={2}></Grid>
                               </Grid>
                             </Grid>
-                            <Grid item xs={1}></Grid>
-                            <Grid item xs={3}>
+
+                            <Grid item xs={4}>
+                            <Tooltip 
+                              title={<Typography>Pushes all labelled data to the end of the list, prioritising the objects you have not yet seen</Typography>} placement="top">
+                                <FormGroup>
+                                  <FormControlLabel control={
+                                    <Switch color="primary"
+                                    checked={this.state.unlabelled_first}
+                                    onChange={this.handleUnlabelledSwitch}/>} 
+                                  label="Show unlabelled objects first" />
+                                </FormGroup>
+                              </Tooltip>
+                            </Grid>
+
+                            <Grid item xs={2}>
                             {this.state.training && <CircularProgress/>}
                             {!this.state.training && 
                               <Button variant="contained" color="primary" id="delete_labels" onClick={this.handleDeleteLabelsButton}> 
@@ -586,7 +669,7 @@ export class AnomalyTab extends React.Component {
                       <Grid item xs={8} >
                         {(this.state.search_cds.length >0) &&
                         // Only display if there are coordinates to search by
-                          <Tooltip title="Opens the CDS portal to search for this object in other datasets" sx={{fontSize: 20}}>
+                          <Tooltip title={<Typography>Opens the CDS portal to search for this object in other datasets</Typography>}>
                             <Button variant="contained" color="primary" id="search1" href={this.state.search_cds} target="_blank">
                               Search by Coordinates (CDS)
                             </Button> 
@@ -597,9 +680,20 @@ export class AnomalyTab extends React.Component {
                       <Grid item xs={8} >
                         {(this.state.search_das.length >0) &&
                           // Only display if there are coordinates to search by
-                          <Tooltip title="Opens DAS which contains extra datasets but requires login">
+                          <Tooltip title={<Typography>Opens DAS which contains extra datasets but requires login</Typography>}>
                             <Button variant="contained" color="primary" id="search2" href={this.state.search_das} target="_blank">
                               Search by Coordinates (DAS)
+                            </Button> 
+                          </Tooltip>
+                        }
+                      </Grid>
+
+                      <Grid item xs={8} >
+                        {(this.state.using_fits) &&
+                          // Only display if these are fits files
+                         <Tooltip title={<Typography>Opens the image in your system's local fits viewer (you can set the command in your script)</Typography>}>
+                            <Button variant="contained" color="primary" id="fits_viewer_button" onClick={this.handleViewerButton}>
+                              Open with Local Viewer
                             </Button> 
                           </Tooltip>
                         }

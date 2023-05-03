@@ -2,6 +2,7 @@ import numpy as np
 import os
 import importlib
 import sys
+import subprocess
 
 
 class Controller:
@@ -33,7 +34,9 @@ class Controller:
         self.column_name_dict = {
             'score': 'Raw anomaly score',
             'trained_score': 'Active learning score',
-            'predicted_user_score': 'Predicted user score'
+            'predicted_user_score': 'Predicted user score',
+            'acquisition': 'Acquisition',
+            'human_label': 'Human applied labels'
         }
 
         self.set_pipeline_script(pipeline_file)
@@ -151,6 +154,29 @@ class Controller:
                     active_output.loc[self.anomaly_scores.index, col]
             return "success"
 
+    def check_if_fits_file(self):
+        """
+        Runs a quick check to see if we're working with fits data to decide 
+        whether or not to display the "open with local viewer" button
+        """
+        if 'original_image' in self.dataset.metadata:
+            return True
+        else:
+            return False
+
+    def open_local_fits_viewer(self, idx):
+        idx = str(idx)
+        metadata = self.dataset.metadata
+        original_image = metadata.loc[idx, 'original_image']
+        filename = self.dataset.images[original_image].filenames[0]
+        # what if this is a multiband image with multiple files?
+        x = metadata.loc[idx, 'x']
+        y = metadata.loc[idx, 'y']
+        cmd = f'ds9 {filename} -zscale -pan to {x} {y} physical'
+        subprocess.Popen(cmd, 
+                         cwd=os.getcwd(), 
+                         shell=True)
+
     def delete_labels(self):
         """
         Allows the user to delete all the labels they've applied and start 
@@ -197,9 +223,14 @@ class Controller:
                 cols = [0.5] * len(clst)
                 clst['color'] = cols
             else:
-                clst['color'] = \
-                    self.anomaly_scores.loc[clst.index, 
-                                            color_by_column]
+                cols = self.anomaly_scores.loc[clst.index, 
+                                               color_by_column]
+                # The acquisition score is a bit arbitrary so we normalise it
+                # for easy visualisation
+                if color_by_column == 'acquisition':
+                    cols = (cols - cols.min()) / (cols.max() - cols.min()) * 5
+                clst['color'] = cols
+
             out = []
             clst = clst.sort_values('color')
             for idx in clst.index:
@@ -257,7 +288,8 @@ class Controller:
         ml_df = self.anomaly_scores
 
         try:
-            out_dict = {}
+            # Include the index by default
+            out_dict = {'index': idx}
             if len(include_keywords) != 0:
                 cols = include_keywords
             else:
@@ -302,25 +334,49 @@ class Controller:
         else:
             return {}
 
-    def randomise_ml_scores(self):
+    def randomise_ml_scores(self, show_unlabelled_first):
         """
-        Returns the anomaly scores in a random order
+        Puts the anomaly scores in a random order. If 
+        show_unlabelled_first is True, puts the unlabelled data up front.
         """
-        inds = np.random.permutation(self.anomaly_scores.index)
-        self.anomaly_scores = self.anomaly_scores.loc[inds]
+        if show_unlabelled_first:
+            self.anomaly_scores.sort_values('human_label', inplace=True)
+            msk = self.anomaly_scores.human_label == -1
+            inds_unlbl = np.random.permutation(self.anomaly_scores[msk].index)
+            msk = self.anomaly_scores.human_label != -1
+            inds_lbl = np.random.permutation(self.anomaly_scores[msk].index)
+            inds = list(inds_unlbl) + list(inds_lbl)
+            self.anomaly_scores = self.anomaly_scores.loc[inds]
+        else:
+            inds = np.random.permutation(self.anomaly_scores.index)
+            self.anomaly_scores = self.anomaly_scores.loc[inds]
 
-    def sort_ml_scores(self, column_to_sort_by='score'):
+    def sort_ml_scores(self, column_to_sort_by='score',
+                       show_unlabelled_first=False):
         """
-        Returns the anomaly scores sorted by a particular column.
+        Sorts the anomaly scores by a particular column. If 
+        show_unlabelled_first is True, puts the unlabelled data up front (this
+        is cheaper than reducing the data to only showing the unlabelled data)
         """
-        anomaly_scores = self.anomaly_scores
-        if column_to_sort_by in anomaly_scores.columns:
-            if column_to_sort_by == "iforest_score":
-                ascending = True
+        columns = self.anomaly_scores.columns
+
+        if column_to_sort_by in columns:
+            if show_unlabelled_first and 'human_label' in columns:
+                self.anomaly_scores.sort_values(
+                    ['human_label', column_to_sort_by], 
+                    inplace=True, 
+                    ascending=[True, False])
             else:
-                ascending = False
-            anomaly_scores.sort_values(column_to_sort_by, inplace=True, 
-                                       ascending=ascending)
+                if column_to_sort_by == 'human_label':
+                    # Also order the index alphabetically to make it easier to
+                    # look at specific objects
+                    self.anomaly_scores.rename_axis('Index', inplace=True)
+                    self.anomaly_scores.sort_values(
+                        [column_to_sort_by, 'Index'], 
+                        inplace=True, ascending=[False, True])
+                else:
+                    self.anomaly_scores.sort_values(
+                        column_to_sort_by, inplace=True, ascending=False)
         else:
             print("Requested column not in ml_scores dataframe")
 
