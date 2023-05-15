@@ -19,10 +19,11 @@ from filek import cutclass
 import filek.utils as utils
 import filek.gen_cutouts as gen_cutouts
 import filek.settings as settings
+import glob
  
 '''
 TODO:
- - something is wrong with the transformer as feature extractor, the shape is wrong
+ - transformer as feature extractor
 '''
 
 # Root directory for data
@@ -47,9 +48,10 @@ dim_reduction = 'pca'
 feature_method = 'cnn'
 model_choice =  'zoobot' #'resnet18'  
 #img_prep= ['rband']
-img_prep_list = ['rband', 'clipping']
+img_prep_list = ['grey', 'scaleclip']
 force_rerun=True
 vis= 'umap'
+
 
 '''
 img_prep_list = []
@@ -65,8 +67,14 @@ print(img_prep_list)
 # Where output should be stored
 output_dir = os.path.join(
     data_dir, 'astronomaly_output', 
-    f'kids_mock_img_prep_{"_".join(img_prep_list)}_dim_red_{dim_reduction}_model_{feature_method}_weights_{model_choice}', '')
-
+    f'NOSCALEkids_mock_img_prep_{"_".join(img_prep_list)}_dim_red_{dim_reduction}_model_{feature_method}_weights_{model_choice}', '')
+'''
+if force_rerun==True and os.path.exists(glob.glob(os.path.join(output_dir,'*'))): 
+    # loop through the list and delete each file
+    for file_name in glob.glob(os.path.join(output_dir,'*')):
+        file_path = os.path.join(output_dir, file_name)
+        os.remove(file_path)
+'''
 #sys.exit()
 if not os.path.exists(output_dir):
     os.makedirs(output_dir)
@@ -82,13 +90,17 @@ for img_prep_tmp in img_prep_list:
         image_transform_function.append(image_preprocessing.image_get_first_band)
     elif img_prep_tmp=='clipping':
         image_transform_function.append(image_preprocessing.image_transform_sigma_clipping)
-image_transform_function.append(image_preprocessing.image_transform_scale) #last one 
+    elif img_prep_tmp=='scaleclip':
+         image_transform_function.append(image_preprocessing.scaling_clipping)
+    elif img_prep_tmp=='scale':
+        image_transform_function.append(image_preprocessing.image_transform_scale) #last one 
 
 # You can apply a different set of transforms to the images that get displayed
 # in the frontend. In this case, I want to see the original images before sigma
 # clipping is applied.
-display_transform_function = []
-#NB: i modified the image_reader.py convert_array_to_image
+display_transform_function = [image_preprocessing.image_transform_colour_correction]
+
+#image_transform_function 
     #image_preprocessing.image_get_first_band]
     #mage_preprocessing.image_transform_scale]
     #make_rgb.make_rgb_one_image ]
@@ -167,9 +179,9 @@ def run_pipeline():
 
     # Now we rescale the features using the same procedure of first creating
     # the pipeline object, then running it on the feature set
-    pipeline_scaler = scaling.FeatureScaler(force_rerun=force_rerun,
-                                            output_dir=output_dir)
-    features = pipeline_scaler.run(features)
+    #pipeline_scaler = scaling.FeatureScaler(force_rerun=force_rerun,
+                                            #output_dir=output_dir)
+    #features = pipeline_scaler.run(features)
 
     # The actual anomaly detection is called in the same way by creating an
     # Iforest pipeline object then running it

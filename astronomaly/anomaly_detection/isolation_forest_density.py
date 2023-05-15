@@ -1,5 +1,5 @@
 from astronomaly.base.base_pipeline import PipelineStage
-from sklearn.ensemble import IsolationForest
+from isotree import IsolationForest
 import pandas as pd
 import pickle
 from os import path
@@ -29,8 +29,7 @@ class IforestAlgorithm(PipelineStage):
         rerunning on new data.
         """
         if self.iforest_obj is not None:
-            #TODO add check for which file to load
-            f = open(path.join(self.output_dir, 'iforest_object.pickle'), 'wb')
+            f = open(path.join(self.output_dir, 'isotree_object.pickle'), 'wb')
             pickle.dump(self.iforest_obj, f)
 
     def _execute_function(self, features):

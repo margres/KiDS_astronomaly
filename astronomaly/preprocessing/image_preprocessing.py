@@ -262,7 +262,8 @@ def image_transform_greyscale(img):
 
     if len(img.shape) > 2:
         img = np.float32(img)
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        #img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
     else:
         img = img
 
@@ -478,6 +479,48 @@ def image_transform_zscale(img, contrast=0.05):
 
 
 def image_get_first_band(img):
-
-    
     return img[:,:,0]
+
+def scaling_clipping(X):
+
+    # Clipping and scaling parameters applied to the data as preprocessing
+    vmin=-1e-9
+    vmax=1e-9
+    scale=100
+
+    mask = np.where(X == 100)
+
+    X[mask] = 0
+
+    # Simple clipping and rescaling the images
+    X = np.clip(X, vmin, vmax)/vmax * scale
+
+    X[mask] = 0
+    return X
+
+
+
+def grayscale_average(image):
+    # Convert the image to grayscale using the average method
+    gray = np.mean(image, axis=2)
+    return gray
+
+def grayscale_luminosity(image):
+    # Convert the image to grayscale using the luminosity method
+    gray = np.dot(image, [0.21, 0.72, 0.07])
+    return gray
+
+def grayscale_lightness(image):
+    # Convert the image to grayscale using the lightness method
+    gray = np.max(image, axis=2)
+    return gray
+
+def grayscale_desaturation(image):
+    # Convert the image to grayscale using the desaturation method
+    gray = np.clip((np.max(image, axis=2) + np.min(image, axis=2)) / 2, 0, 255)
+    return gray
+
+def grayscale_single_channel(image):
+    # Convert the image to grayscale using a single channel (e.g., red channel)
+    gray = image[:, :, 0]
+    return gray

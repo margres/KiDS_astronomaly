@@ -66,14 +66,14 @@ def convert_array_to_image(arr, plot_cmap=None, interpolation='bicubic'):
         Object ready to be passed directly to the frontend
     """
     with mpl.rc_context({'backend': 'Agg'}):
-        print(arr.shape)
+        #print(arr.shape)
         if len(arr.shape)==2:
             # if greyscale plot just that
             fig = plt.figure(figsize=(1, 1), dpi=4 * arr.shape[1])
             ax = plt.Axes(fig, [0., 0., 1., 1.])
             ax.set_axis_off()
             fig.add_axes(ax)
-            plt.imshow(arr, cmap='gray', origin='lower',
+            plt.imshow(arr, cmap=plot_cmap, origin='lower',
                     interpolation=interpolation)
             output = io.BytesIO()
             FigureCanvas(fig).print_png(output)
@@ -92,7 +92,7 @@ def convert_array_to_image(arr, plot_cmap=None, interpolation='bicubic'):
                       # cmap=plot_cmap, origin='lower', interpolation=interpolation)
             ax2.imshow(make_rgb.make_rgb_one_image(arr),
                        cmap=plot_cmap, origin='lower', interpolation=interpolation)
-            np.save('/Users/mrgr/Documents/GitHub/KiDS_astronomaly/rgb.npy',make_rgb.make_rgb_one_image(arr))
+            #np.save('/Users/mrgr/Documents/GitHub/KiDS_astronomaly/rgb.npy',make_rgb.make_rgb_one_image(arr))
             #print(np.shape(make_rgb.make_rgb_one_image(arr)))
             ax2.set_axis_off()
             output = io.BytesIO()
@@ -1065,18 +1065,6 @@ class ImageThumbnailsDataset(Dataset):
                                 self.metadata.loc[idx, 'KIDS_ID'] ,self.metadata.loc[idx, 'KIDS_TILE'],  
                                 channels=['r', 'i','g'])
                     cutout = np.transpose(img.copy(), (1,2,0))
-                    #print(np.shape(cutout))
-                    #print( self.make_rgb)
-                    #if self.make_rgb:
-                        #cutout = np.transpose(img.copy(), (1,2,0))
-                    #    pass
-                    #elif self.make_rgb==False:
-                    #    cutout = cutout[:,:,0]
-                    #elif self.make_rgb=='grey':
-                    #    #print('grey')
-                    #    cutout = image_preprocessing.image_transform_greyscale(cutout)
-                    #else:
-                    #    print('i dont know how to plot')
             
         else:
             print('else')
