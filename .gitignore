@@ -1,3 +1,11 @@
+*.png
+*.jpg
+*.npz
+wandb*
+*ipynb
+*npy
+astronomaly_output*
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
