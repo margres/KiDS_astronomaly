@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 from pandas.util import hash_pandas_object
 import time
-
+import sys
 
 class PipelineStage(object):
     def __init__(self, *args, **kwargs):
@@ -294,6 +294,10 @@ class PipelineStage(object):
                     print(n, 'instances completed')
                 input_instance = dataset.get_sample(i)
 
+                #if input_instance==-1:
+                #    continue
+                #print(np.shape(input_instance))
+                #sys.exit()
                 # Drop any object that's all zeros or all NaNs since it
                 # contains no data
                 try:

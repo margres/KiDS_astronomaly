@@ -3,7 +3,7 @@ from astronomaly.data_management import image_reader
 from astronomaly.preprocessing import image_preprocessing
 from astronomaly.feature_extraction import shape_features, pretrained_cnn
 from astronomaly.postprocessing import scaling
-from astronomaly.anomaly_detection import isolation_forest, human_loop_learning
+from astronomaly.anomaly_detection import isolation_fcome, human_loop_learning
 from astronomaly.visualisation import umap_plot
 import os
 import pandas as pd

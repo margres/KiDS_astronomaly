@@ -3,6 +3,8 @@ from skimage.transform import resize
 import cv2
 from astropy.stats import sigma_clipped_stats
 from astropy.visualization import ZScaleInterval
+from image_preprocessing import image_transform_sigma_clipping
+import cv2
 
 
 def image_transform_log(img):
@@ -107,7 +109,7 @@ def image_transform_scale(img):
     return (img - img.min()) / (img.max() - img.min())
 
 
-def image_transform_resize(img, new_shape):
+def image_transform_resize(img, new_shape=[424, 424]):
     """
     Resize an image to new dimensions (e.g. to feed into a deep learning 
     network).
@@ -218,7 +220,7 @@ def image_transform_sigma_clipping(img, sigma=3, central=True):
     img_bin = np.zeros(im.shape, dtype=np.uint8)
 
     img_bin[im <= thresh] = 0
-    img_bin[im > thresh] = 12
+    img_bin[im > thresh] = 1
 
     contours, hierarchy = cv2.findContours(img_bin,
                                            cv2.RETR_EXTERNAL,
@@ -241,6 +243,8 @@ def image_transform_sigma_clipping(img, sigma=3, central=True):
     new_img[contour_mask == 1] = img[contour_mask == 1]
 
     return new_img
+
+
 
 
 def image_transform_greyscale(img):
@@ -524,3 +528,8 @@ def grayscale_single_channel(image):
     # Convert the image to grayscale using a single channel (e.g., red channel)
     gray = image[:, :, 0]
     return gray
+
+def create_2d_rgb_image(rgb_image):
+    # Compute the average value across color channels
+    average_color = np.mean(rgb_image, axis=2)
+    return average_color

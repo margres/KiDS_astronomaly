@@ -1,5 +1,9 @@
 from astropy.io import fits
 from astropy.wcs import WCS
+import sys
+sys.path.append('/home/grespanm/github/TEGLIE/teglie_scripts/')
+import settings
+from utils import from_fits_to_array
 import numpy as np
 import os
 import tracemalloc
@@ -11,16 +15,15 @@ import cv2
 from astronomaly.base.base_dataset import Dataset
 from astronomaly.base import logging_tools
 from astronomaly.utils import utils
-import filek.make_rgb as make_rgb
+import make_rgb
 mpl.use('Agg')
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas  # noqa: E402, E501
 import matplotlib.pyplot as plt  # noqa: E402
-from astronomaly.preprocessing import image_preprocessing
 
 def change_specialcharacters(string):
     return string.replace('KIDS', 'KiDS_DR4.0').replace('.', 'p').replace('-', 'm').rstrip(' ')
 
-
+'''
 def from_fits_to_array(folder_path, img_ID, tile_ID, channels=['r','i','g'] ):
 
     img=[]
@@ -45,8 +48,8 @@ def from_fits_to_array(folder_path, img_ID, tile_ID, channels=['r','i','g'] ):
         #print(img)
 
     return np.array(img)
-
-def convert_array_to_image(arr, plot_cmap=None, interpolation='bicubic'):
+'''
+def convert_array_to_image(arr, plot_cmap='viridis', interpolation='bicubic'):
     """
     Function to convert an array to a png image ready to be served on a web
     page.
@@ -81,6 +84,8 @@ def convert_array_to_image(arr, plot_cmap=None, interpolation='bicubic'):
         else:
             #if 3 bands plot r band and rgb
             fig = plt.figure(figsize=(1, 1), dpi=6 * arr.shape[1])
+            
+            '''
             ax1 = fig.add_subplot(1, 2, 1)
             #r band #np.rot90(arr[:,:,0]),
             ax1.imshow(arr[:,:,0], 
@@ -90,11 +95,15 @@ def convert_array_to_image(arr, plot_cmap=None, interpolation='bicubic'):
             #rgb
             #ax2.imshow(make_rgb.make_rgb_one_image(arr),
                       # cmap=plot_cmap, origin='lower', interpolation=interpolation)
-            ax2.imshow(make_rgb.make_rgb_one_image(arr),
+            ax2.imshow(make_rgb.make_rgb_one_image(arr, return_img=True),
                        cmap=plot_cmap, origin='lower', interpolation=interpolation)
             #np.save('/Users/mrgr/Documents/GitHub/KiDS_astronomaly/rgb.npy',make_rgb.make_rgb_one_image(arr))
             #print(np.shape(make_rgb.make_rgb_one_image(arr)))
             ax2.set_axis_off()
+            '''
+            plt.imshow(make_rgb.make_rgb_one_image(arr, return_img=True),
+                       cmap=plot_cmap, origin='lower', interpolation=interpolation)
+            plt.axis('off')
             output = io.BytesIO()
             FigureCanvas(fig).print_png(output)
             plt.close(fig)
@@ -127,6 +136,7 @@ def apply_transform(cutout, transform_function):
             cutout = new_cutout
         except TypeError:  # Simple way to test if there's only one function
             cutout = transform_function(cutout)
+    #print(np.shape(cutout))
     return cutout
 
 
@@ -874,6 +884,7 @@ class ImageThumbnailsDataset(Dataset):
             self.display_transform_function = display_transform_function
 
         if df_kids is not None:
+            print('dataframe from KiDS')
             is_kids = True
         else:
             is_kids = False
@@ -927,10 +938,10 @@ class ImageThumbnailsDataset(Dataset):
             #file_paths = df_kids['FOLDER'].values
 
             ##label from transformer encoder
-            if 'LABEL_TE' in  df_kids.columns:
+            if 'LABEL' in  df_kids.columns:
                 pass
             else:
-                df_kids['LABEL_TE'] = np.ones(len(df_kids))*-1
+                df_kids['LABEL'] = np.ones(len(df_kids))*-1
 
             #label from active learning
             if 'LABEL_AL' in  df_kids.columns:
@@ -939,10 +950,10 @@ class ImageThumbnailsDataset(Dataset):
                 df_kids['LABEL_AL'] = np.ones(len(df_kids))*-1
             
             inds =  df_kids['KIDS_ID'].values
-            df_kids['filename'] = [tile +'__'+ id for id,tile in 
-                        zip(df_kids['KIDS_ID'].values,df_kids['KIDS_TILE'].values)]
+            df_kids['filename'] = [tile +'__'+ id for id,tile in zip(df_kids['KIDS_ID'].values,df_kids['KIDS_TILE'].values)]
     
             df_kids = df_kids.drop_duplicates(subset='KIDS_ID').reset_index(drop=True)
+            print(df_kids.head())
             self.metadata = df_kids.set_index(inds)
             #df_kids.to_csv(os.path.join('/Users/mrgr/Documents/GitHub/KiDS_astronomaly/example_data/KiDS_cutouts','aa.csv'), index=False)
                 
@@ -966,7 +977,7 @@ class ImageThumbnailsDataset(Dataset):
             Array of image cutout
         """
 
-        if self.fits_format and not self.is_kids:
+        if self.fits_format and (not self.is_kids):
             try:
                 filename = self.metadata.loc[idx, 'filename']
                 img = fits.getdata(filename, memmap=True)
@@ -995,23 +1006,33 @@ class ImageThumbnailsDataset(Dataset):
                     print('Missing data: Enable check_corrupt_data.')
 
         elif self.fits_format and self.is_kids:
+            
             try:    
                 img = from_fits_to_array(self.metadata.loc[idx, 'FOLDER'],
                             self.metadata.loc[idx,'KIDS_ID'] ,self.metadata.loc[idx, 'KIDS_TILE'],  
-                            channels=['r', 'i','g'])
+                            channels=['r', 'i','g'], astronomaly=True)
+                if len(np.shape(img))<2:
+                    #print('return None')
+                    return np.empty((101,101,3))
+                #print(np.shape(img))
                 img = np.transpose(img, (1,2,0)) 
+
+                #print(np.shape(img))
                 #img = image_preprocessing.image_transform_greyscale(img) 
                 #print('load',np.shape(apply_transform(img.copy(), self.transform_function)))       
                 return apply_transform(img.copy(), self.transform_function)
             
             except FileNotFoundError:
                 print('File not found')
+                pass
+            except ValueError:
+                print('Value error, the same of the img is', np.shape(img))
 
         else:
             filename = self.metadata.loc[idx, 'filename']
             img = cv2.imread(filename)
-            img = cv2.cvtColor(img)#, cv2.COLOR_BGR2RGB)
-            
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            print(np.shape(img))
             return apply_transform(img, self.transform_function)
 
     def get_display_data(self, idx):
@@ -1060,10 +1081,14 @@ class ImageThumbnailsDataset(Dataset):
                     else:
                         print('Missing data: Enable check_corrupt_data.')
             else:
+                    #print('FOLDERRR',self.metadata.loc[idx, 'FOLDER'])
+                    #print('FOLDERRR', self.metadata.loc[idx, 'KIDS_ID'] ,self.metadata.loc[idx, 'KIDS_TILE'])
                     #is img from kids, load it the correct  way 
-                    img = from_fits_to_array(self.metadata.loc[idx, 'FOLDER'],
+                    img = from_fits_to_array(settings.path_to_save_imgs,
+                        #self.metadata.loc[idx, 'FOLDER'],
                                 self.metadata.loc[idx, 'KIDS_ID'] ,self.metadata.loc[idx, 'KIDS_TILE'],  
-                                channels=['r', 'i','g'])
+                                channels=['r', 'i','g'],  astronomaly=True)
+                    #print(np.shape(img))
                     cutout = np.transpose(img.copy(), (1,2,0))
             
         else:

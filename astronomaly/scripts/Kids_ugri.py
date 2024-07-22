@@ -1,7 +1,17 @@
 import sys
-sys.path.append('/Users/mrgr/Documents/GitHub/FiLeK/')
-#sys.path.append('/Users/mrgr/Documents/GitHub/KiDS_astronomaly/')
-# An example with a subset of Galaxy Zoo data
+#import faulthandler
+#faulthandler.enable()
+import warnings
+warnings.filterwarnings("ignore")
+
+bp4=True
+if bp4:
+    sys.path.append('/home/grespanm/github/TEGLIE/teglie_scripts/')
+    sys.path.append('/home/grespanm/github/KiDS_astronomaly/')
+else:
+    sys.path.append('/Users/mrgr/Documents/GitHub/FiLeK/')
+    sys.path.append('/Users/mrgr/Documents/GitHub/KiDS_astronomaly/')
+
 from astronomaly.data_management import image_reader
 from astronomaly.preprocessing import image_preprocessing
 from astronomaly.feature_extraction import shape_features, pretrained_cnn
@@ -20,44 +30,69 @@ import filek.utils as utils
 import filek.gen_cutouts as gen_cutouts
 import filek.settings as settings
 import glob
- 
-'''
-TODO:
- - transformer as feature extractor
-'''
+
+
+
+
+def add_preprocessing(image_transform_function):
+
+    if img_prep_tmp=='grey-avg':
+        image_transform_function.append(image_preprocessing.grayscale_average)
+    elif img_prep_tmp=='grey-lum':
+        image_transform_function.append(image_preprocessing.grayscale_luminosity)
+    elif img_prep_tmp=='grey-lightness':
+        image_transform_function.append(image_preprocessing.grayscale_lightness)
+    elif img_prep_tmp=='grey-desaturation':
+        image_transform_function.append(image_preprocessing.grayscale_desaturation)
+    elif img_prep_tmp=='rgb':
+        image_transform_function.append(make_rgb.make_rgb_one_image)
+    elif img_prep_tmp=='rgb2d':
+        image_transform_function.append(image_preprocessing.create_2d_rgb_image)
+    elif img_prep_tmp=='rband':
+        image_transform_function.append(image_preprocessing.image_get_first_band)
+    elif img_prep_tmp=='sigmaclip':
+        image_transform_function.append(image_preprocessing.image_transform_sigma_clipping)
+    elif img_prep_tmp=='scaleclip':
+         image_transform_function.append(image_preprocessing.scaling_clipping)
+    elif img_prep_tmp=='scale':
+        image_transform_function.append(image_preprocessing.image_transform_scale)
+
+    return image_transform_function
 
 # Root directory for data
-data_dir = os.path.join(settings.path_to_save_imgs,'mock')
+data_dir = settings.path_to_save_imgs #os.path.join(settings.path_to_save_imgs,'mock')
 #os.path.join('/Users/mrgr/Documents/GitHub/KiDS_astronomaly/example_data/KiDS_cutouts')
-
-
 is_kids=True
 one_tile=False
+
+
 
 if one_tile:
     table_tile = cutclass.getTableTile(tile_name='KIDS_40.6_-28.2')
     tab_to_use = gen_cutouts.apply_preprocessing(table_tile)[:50]
     df_list_obj = tab_to_use['ID', 'KIDS_TILE'].to_pandas().reset_index(drop=True)
-    df_list_obj['FOLDER'] = settings.path_to_save_imgs  
+    df_list_obj['FOLDER'] = settings.path_to_save_imgs 
+    print(settings.path_to_save_imgs ) 
     df_list_obj.rename(columns={"ID": "KIDS_ID"}, inplace=True)
 else:
-    df_list_obj= pd.read_csv(os.path.join(settings.path_to_save_imgs,'mock','df_tot.csv')).drop_duplicates(subset='KIDS_ID').reset_index(drop=True)[:-1]
+    pp= '/home/grespanm/github/KiDS_astronomaly/example_data/KiDS_cutouts/'
+    df_list_obj= pd.read_csv(os.path.join(pp,'mock','df_tot.csv')).drop_duplicates(subset='KIDS_ID').reset_index(drop=True)[:-1]
     df_list_obj['FOLDER'] = data_dir
 
 dim_reduction = 'pca'
 feature_method = 'cnn'
 model_choice =  'zoobot' #'resnet18'  
 #img_prep= ['rband']
-img_prep_list = ['grey', 'scaleclip']
-force_rerun=True
+img_prep_list = ['grey-avg','sigmaclip','scale']
+force_rerun=False
 vis= 'umap'
-
 
 '''
 img_prep_list = []
 if len(img_prep)>0 and not isinstance(img_prep,list):
     img_prep_list.append(img_prep)
 elif isinstance(img_prep,list):
+
     img_prep_list = img_prep 
 
 if img_prep == '' or ('grey' not in img_prep and 'rband' not in img_prep):
@@ -65,9 +100,10 @@ if img_prep == '' or ('grey' not in img_prep and 'rband' not in img_prep):
 '''    
 print(img_prep_list) 
 # Where output should be stored
+
 output_dir = os.path.join(
     data_dir, 'astronomaly_output', 
-    f'NOSCALEkids_mock_img_prep_{"_".join(img_prep_list)}_dim_red_{dim_reduction}_model_{feature_method}_weights_{model_choice}', '')
+    f'kids_mockimg_prep_{"_".join(img_prep_list)}_dim_red_{dim_reduction}_model_{feature_method}_weights_{model_choice}', '')
 '''
 if force_rerun==True and os.path.exists(glob.glob(os.path.join(output_dir,'*'))): 
     # loop through the list and delete each file
@@ -84,21 +120,12 @@ image_transform_function = []
 # extraction is performed. Functions are called in order.
 #for img_prep_tmp in img_prep:
 for img_prep_tmp in img_prep_list:
-    if img_prep_tmp=='grey':
-        image_transform_function.append(image_preprocessing.image_transform_greyscale)
-    elif img_prep_tmp=='rband':
-        image_transform_function.append(image_preprocessing.image_get_first_band)
-    elif img_prep_tmp=='clipping':
-        image_transform_function.append(image_preprocessing.image_transform_sigma_clipping)
-    elif img_prep_tmp=='scaleclip':
-         image_transform_function.append(image_preprocessing.scaling_clipping)
-    elif img_prep_tmp=='scale':
-        image_transform_function.append(image_preprocessing.image_transform_scale) #last one 
+    image_transform_function = add_preprocessing(image_transform_function)
 
 # You can apply a different set of transforms to the images that get displayed
 # in the frontend. In this case, I want to see the original images before sigma
 # clipping is applied.
-display_transform_function = [image_preprocessing.image_transform_colour_correction]
+display_transform_function = image_transform_function
 
 #image_transform_function 
     #image_preprocessing.image_get_first_band]
@@ -237,3 +264,4 @@ def run_pipeline():
             'anomaly_scores': anomalies,
             'active_learning': pipeline_active_learning,
             'visualisation': vis_plot}
+

@@ -1,35 +1,41 @@
 import numpy as np
 from astronomaly.base.base_pipeline import PipelineStage
+import timm
+
+import sys, os
+sys.path.append('/home/grespanm/github/TEGLIE/teglie_scripts/')
+sys.path.append('/home/grespanm/github/zoobot/')
 
 try:
     import torch
     from torchvision import models
     from torchvision import transforms
+
 except ImportError:
     err_string = "pytorch and torchvision must be installed to use this module"
     raise ImportError(err_string)
-
+from zoobot.pytorch.training import finetune
 try:
     from zoobot.pytorch.training import finetune
     zoobot_available = True
 except ImportError:
     zoobot_available = False
-
-
 from astronomaly.preprocessing import image_preprocessing
 import cv2
-import tensorflow as tf
-import sys
-sys.path.append('/Users/mrgr/Documents/GitHub/FiLeK/')
+from zoobot.pytorch.training.finetune import FinetuneableZoobotClassifier
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'  # 0: INFO, 1: WARNING, 2: ERROR, 3: FATAL
+
 #from filek import models
 #from filek.preprocessing import scaling_clipping
 
 
+#'/Users/mrgr/Documents/GitHub
 print('zoobot available', zoobot_available)
 class CNN_Features(PipelineStage):
     def __init__(self, 
                  model_choice='zoobot', 
-                 zoobot_checkpoint_location='/Users/mrgr/Documents/GitHub/KiDS_astronomaly/example_data/zoobot/effnetb0_greyscale_224px.ckpt',
+                 zoobot_checkpoint_location='/home/grespanm/github/KiDS_astronomaly/example_data/zoobot/effnetb0_greyscale_224px.ckpt',
                  **kwargs):
         """
         Runs a pretrained CNN and extracts the deep features before the 
@@ -73,10 +79,20 @@ class CNN_Features(PipelineStage):
 
             self.transforms = transforms.Compose(default_transforms)
 
-            self.model = finetune.load_pretrained_encoder(zoobot_checkpoint_location)
+            self.model = FinetuneableZoobotClassifier(
+                    # arguments for any FinetuneableZoobot class
+                    # there are many options for customizing finetuning. See the FinetuneableZoobotAbstract docstring.
+                    name='mwalmsley/convnext_nano',
+                      num_classes=2,
+                      n_layers=0
+                )
+            #self.model =  timm.create_model('hf_hub:mwalmsley/zoobot-encoder-some-name', pretrained=True, num_classes=0)
+            #finetune.load_pretrained_zoobot(zoobot_checkpoint_location)
+            self.model = self.model.to('cpu')
             #self.model = finetune.load_encoder(zoobot_checkpoint_location)
             print('using weights from zoobot')
-        else:
+
+        elif 'resnet' in model_choice:
             # It's one of the resnets
             transform_list = default_transforms + resnet_normalization
 
@@ -91,6 +107,8 @@ class CNN_Features(PipelineStage):
 
             # Strip off the last layer to get a normal feature extractor
             self.model = torch.nn.Sequential(*list(model.children())[:-1])
+        else:
+            raise ValueError('model not known')
 
     def _execute_function(self, image):
         """
@@ -135,14 +153,16 @@ class CNN_Features(PipelineStage):
             image = np.transpose(image, (1,2,0))
         else:
             pass
+        '''
         if self.model_choice== 'zoobot':
             #zoobot accepts only grey images
             #we just use the rband
-            if len(image.shape)>2:
+            #image = image_preprocessing.image_transform_greyscale(image)
+
+            if len(image.shape)!=(424, 424, 3):
                 #image = image[:,:,0]
                 raise ValueError('Image has the wrong size for zoobot')
-            
-            #image = image_preprocessing.image_transform_greyscale(image)
+        '''
 
         processed_image = self.transforms(image)
         
