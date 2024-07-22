@@ -9,7 +9,8 @@ astronomaly_output*
 *.pt
 # Byte-compiled / optimized / DLL files
 __pycache__/
-
+*.html
+*.pdf
 *$py.class
 
 # C extensions
