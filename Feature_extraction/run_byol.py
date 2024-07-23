@@ -31,7 +31,6 @@ import plotly.express as px
 from astropy.stats import sigma_clip
 from skimage.restoration import denoise_bilateral, denoise_tv_chambolle
 sys.path.append('/users/grespanm/KiDS_astronomaly/astronomaly/preprocessing/')
-from image_preprocessing import image_transform_sigma_clipping
 import cv2
 from astropy.stats import sigma_clipped_stats
 try:
@@ -42,14 +41,14 @@ except:
 from utils_byol import *
 import os
 
-path_results = os.path.join(os.getcwd(), 'FE_results')
-#'/users/grespanm/FE_results/'
+
+pp = '/users/grespanm/KiDS_astronomaly/Feature_extraction'
+path_results = os.path.join(pp, 'FE_results')
 
 # Mapping of function objects to their names
 function_name_mapping = {
     sigma_clip: 'sigmaclip',
     denoise_bilateral_img: 'denoisebilateral',
-    image_transform_sigma_clipping : 'masked5sigmaclip',
     sigma_clipping_gray: 'sigmaclip_gray',
     sigma_70pxsquare_clipping_gray : '50pxsigmaclip_gray'
 }
@@ -88,7 +87,7 @@ class BYOLTEGLIETest:
         self.model = tv.models.resnet18(weights="IMAGENET1K_V1")
         self.path_csv = '/users/grespanm/data/table_all_checked.csv'
         self.path_data = '/users/grespanm/data'
-        self.path_models = os.path.join(os.getcwd(), 'models')
+        self.path_models = os.path.join(pp, 'models')
         self.project_name = "BYOL TEGLIE test"
         self.tab_teglie = pd.read_csv(self.path_csv)
         self.continuation = False
