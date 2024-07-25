@@ -3,7 +3,6 @@ from skimage.transform import resize
 import cv2
 from astropy.stats import sigma_clipped_stats
 from astropy.visualization import ZScaleInterval
-from image_preprocessing import image_transform_sigma_clipping
 import cv2
 
 

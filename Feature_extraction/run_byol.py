@@ -39,25 +39,21 @@ try:
 except:
     sys.path.append('/home/grespanm/github/TEGLIE/teglie_scripts/')
 from utils_byol import *
+
 import os
 
+usr_parent = '/'.join(os.getcwd().split('/')[:3])
 
-pp = '/users/grespanm/KiDS_astronomaly/Feature_extraction'
-path_results = os.path.join(pp, 'FE_results')
+## different paths in different machines
+if 'home' in usr_parent:
+    usr = os.path.join(usr_parent, 'github')
+
+
+pp = os.path.join(usr, 'KiDS_astronomaly/Feature_extraction')
+#path_results = os.path.join(pp, 'FE_results')
 
 # Mapping of function objects to their names
-function_name_mapping = {
-    sigma_clip: 'sigmaclip',
-    denoise_bilateral_img: 'denoisebilateral',
-    sigma_clipping_gray: 'sigmaclip_gray',
-    sigma_70pxsquare_clipping_gray : '50pxsigmaclip_gray'
-}
 
-
-def generate_clean_name(preprocessing_steps, var, scaler):
-    preprocessing_names = [function_name_mapping[func] for func in preprocessing_steps]
-    preprocessing_str = ','.join(preprocessing_names)
-    return f'features&labels_prepbefore_[{preprocessing_str}]_PCA_var_{var}_scaler_{scaler}.npz'
 
 
 class BYOLTEGLIETest:
@@ -85,17 +81,28 @@ class BYOLTEGLIETest:
         self.l_r = 1e-4
         self.best_loss = 5000000
         self.model = tv.models.resnet18(weights="IMAGENET1K_V1")
-        self.path_csv = '/users/grespanm/data/table_all_checked.csv'
-        self.path_data = '/users/grespanm/data'
+        self.path_csv =  os.path.join(usr,'data/table_all_checked.csv')
+        self.path_data = os.path.join(usr,'data')
         self.path_models = os.path.join(pp, 'models')
         self.project_name = "BYOL TEGLIE test"
         self.tab_teglie = pd.read_csv(self.path_csv)
         self.continuation = False
-
+        self.path_repository  = usr
+        self.path_results = os.path.join(pp, 'FE_results')
         #self.wandb = self.initialize_wandb()
         self.augment_fn = self.initialize_augmentations()
         self.device = self.initialize_device()
         self.learner = self.initialize_BYOL()
+        self.function_name_mapping = {
+                            sigma_clip: 'sigmaclip',
+                            denoise_bilateral_img: 'denoisebilateral',
+                            sigma_clipping_gray: 'sigmaclip_gray',
+                            sigma_70pxsquare_clipping_gray : '50pxsigmaclip_gray'}
+
+    def generate_clean_name(self, preprocessing_steps, var, scaler):
+        preprocessing_names = [self.function_name_mapping[func] for func in preprocessing_steps]
+        preprocessing_str = ','.join(preprocessing_names)
+        return f'features&labels_prepbefore_[{preprocessing_str}]_PCA_var_{var}_scaler_{scaler}.npz'
 
 
     def initialize_BYOL(self):
@@ -166,7 +173,7 @@ class BYOLTEGLIETest:
         channels = ['r', 'i', 'g']
         label = self.tab_teglie['LABEL'].values
 
-        dataset = datasetkids.KiDSDatasetloader(kids_id_list, kids_tile_list, checkpoint_path=self.path_data,  channels=channels, labels=label)
+        dataset = datasetkids.KiDSDatasetloader(kids_id_list=kids_id_list, kids_tile_list=kids_tile_list, checkpoint_path=self.path_data,  channels=channels, labels=label)
 
         none_indices = dataset.check_for_nones()
         if none_indices:
@@ -412,7 +419,10 @@ class BYOLTEGLIETest:
         if file_path is None:
             file_path = '/users/grespanm/KiDS_astronomaly/Feature_extraction/features_and_labels.npz'
         else:
-            file_path = os.path.join(path_results, file_path)
+            file_path = os.path.join(self.path_results, file_path)
+
+        #if os.path.isfile(os.path.join(self.path_models, "best_" + self.model_name + ".pt")):
+        #        model.load(os.path.join(self.path_models, "best_" + self.model_name + ".pt"))
             
         if os.path.isfile(file_path):
             print('Features saved - loading it')
@@ -431,13 +441,10 @@ class BYOLTEGLIETest:
 
         return features, labels
 
-    def run_byol_training(self):
-        self.initialize_wandb()
-        self.prepare_dataset()
-        self.train_model()
+
 
           
-    def run_feature_extractor(self, variance_threshold=0.9, use_scaler=False, preprocessing_after_byol=None):
+    def run_feature_extractor(self, variance_threshold=0.98, use_scaler=False, preprocessing_after_byol=None):
          
         checkpoint_path = os.path.join(self.path_models, "best_" + self.model_name + ".pt")
         checkpoint = torch.load(checkpoint_path, map_location = self.device)
@@ -445,14 +452,20 @@ class BYOLTEGLIETest:
         self.model.train(mode=False)  # Set the model to evaluation mode
         self.model.fc = torch.nn.Identity()  # Replace the last FC layer with an Identity layer 
         
-        name_features_fle =  generate_clean_name(preprocessing_after_byol, variance_threshold, use_scaler)
+        name_features_fle =  self.generate_clean_name(preprocessing_after_byol, variance_threshold, use_scaler)
         print(f'File will be saved with name {name_features_fle}')
         
         self.learner.eval()
         features, labels = self.get_features(self.learner, file_path=name_features_fle, variance_threshold=variance_threshold,  use_scaler=use_scaler )
-
+        
+        return features, labels
         #utils_plot.plot_UMAP(pca_result, labels)
 
+
+    def run_byol_training(self):
+        self.initialize_wandb()
+        self.prepare_dataset()
+        self.train_model()
 
 
 

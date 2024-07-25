@@ -36,6 +36,8 @@ class CNN_Features(PipelineStage):
     def __init__(self, 
                  model_choice='zoobot', 
                  zoobot_checkpoint_location='/home/grespanm/github/KiDS_astronomaly/example_data/zoobot/effnetb0_greyscale_224px.ckpt',
+                 features_file_path=None,
+                 
                  **kwargs):
         """
         Runs a pretrained CNN and extracts the deep features before the 
@@ -52,8 +54,10 @@ class CNN_Features(PipelineStage):
         super().__init__(model_choice=model_choice, **kwargs)
 
         self.model_choice = model_choice
+        self.features_file_path = features_file_path
         # Easiest to set these once this has been run once
         self.labels = []
+
         
         # All the models use these
         default_transforms = [transforms.ToTensor(),
@@ -107,8 +111,40 @@ class CNN_Features(PipelineStage):
 
             # Strip off the last layer to get a normal feature extractor
             self.model = torch.nn.Sequential(*list(model.children())[:-1])
+        elif 'byol':
+            print('hurray byol')
+            # Load precomputed features if a file path is provided
+            if self.features_file_path is not None:
+                features, self.labels = self.load_features(self.features_file_path)
+            else:
+                self.features = None
+                self.labels = None
+        
         else:
             raise ValueError('model not known')
+        
+
+    def load_features(self, file_path):
+        """
+        Load features from a .npz file
+
+        Parameters
+        ----------
+        file_path: string
+            Path to the .npz file
+
+        Returns
+        -------
+        features: np.ndarray
+            Loaded features
+        labels: np.ndarray
+            Corresponding labels
+        """
+        data = np.load(file_path)
+        features = data['features']
+        labels = data['labels']
+        return features, labels
+    
 
     def _execute_function(self, image):
         """
@@ -123,7 +159,12 @@ class CNN_Features(PipelineStage):
         -------
         array
             Contains the extracted deep features
+
         """
+        if self.features is not None:
+            # Use precomputed features if available
+            return self.features
+
         # The transforms can't handle floats to convert to uint8
         image = (image * 255).astype(np.uint8)
         #TODO WHY??
@@ -153,16 +194,6 @@ class CNN_Features(PipelineStage):
             image = np.transpose(image, (1,2,0))
         else:
             pass
-        '''
-        if self.model_choice== 'zoobot':
-            #zoobot accepts only grey images
-            #we just use the rband
-            #image = image_preprocessing.image_transform_greyscale(image)
-
-            if len(image.shape)!=(424, 424, 3):
-                #image = image[:,:,0]
-                raise ValueError('Image has the wrong size for zoobot')
-        '''
 
         processed_image = self.transforms(image)
         
@@ -179,66 +210,3 @@ class CNN_Features(PipelineStage):
 
         return feats
     
-
-'''
-class TE_Features(PipelineStage):
-    def __init__(self, 
-                 model_choice='lens15',
-                 layer_name='Conv8',
-                 **kwargs):
-        """
-        Runs a pretrained CNN and extracts the deep features before the 
-        classification layer.
-
-        Parameters
-        ----------
-        model_choice: string
-            The model to use. Options are:
-            'zoobot', 'resnet18' or 'resnet50'. These also use predefined
-            transforms
-        """
-
-        super().__init__(model_choice=model_choice, **kwargs)
-
-        self.model_choice = model_choice
-        self.layer_name = layer_name
-        # Easiest to set these once this has been run once
-        self.labels = []
-
-
-    # Define a function that takes an image as input and returns the output of the desired layer
-    def _execute_function(self, image):
-
-        if self.model_choice == 'lens15':
-            model = models.lens15()
-
-        # Get a handle to the desired layer's output tensor
-        layer_output = model.get_layer(self.layer_name).output
-        
-        image = scaling_clipping(image)
-        dim_idx = np.where(np.array(image.shape) == 4)[0]
-        if len(dim_idx)==0:
-            raise ValueError('These models need 4D images')
-        if dim_idx==0:
-            image = np.transpose(image, (1,2,0))
-        elif dim_idx==2:
-            pass
-
-        # Preprocess the image
-        image = image.astype(np.float32)
-        image = np.expand_dims(image, axis=0)
-
-        # Preprocess the input image (assuming 'preprocess_input' is a function that preprocesses the input image for the model)
-        processed_image = scaling_clipping(image)
-        
-        # Create a Keras model that outputs the desired layer's output tensor
-        intermediate_model = tf.keras.models.Model(inputs=model.input, outputs=layer_output)
-        
-        # Run the model on the input image and return the output
-        feats = intermediate_model.predict(image, verbose=0)
-
-        if len(self.labels) == 0:
-            labels = [f'feat{i}' for i in range(len(feats))]
-            
-        return feats
-'''

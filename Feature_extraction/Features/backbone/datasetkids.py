@@ -1,6 +1,7 @@
 import os
 import numpy as np
 import torch
+import pandas as pd
 from torch.utils.data import Dataset, DataLoader
 import torchvision.transforms as transforms
 from PIL import Image
@@ -14,37 +15,152 @@ try:
     import make_rgb, settings, utils
 except:
     sys.path.append('/home/grespanm/github/TEGLIE/teglie_scripts/')
-    import make_rgb, settings, utils
-from preprocessing import scaling_clipping
+    import make_rgb, settings, utils, gen_cutouts
+
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import matplotlib.pyplot as plt
 import time
+import matplotlib as mpl
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+mpl.use('Agg')
+import io
+
+usr = '/'.join(os.getcwd().split('/')[:3])
+## different paths in different machines
+if 'home' in usr:
+    usr = os.path.join(usr, 'github')
+print(usr)
+
+
+def convert_array_to_image(arr, plot_cmap='viridis', interpolation='bicubic'):
+    """
+    Function to convert an array to a png image ready to be served on a web
+    page.
+
+    Parameters
+    ----------
+    arr : np.ndarray
+        Input image
+    plot_cmap : str, optional
+        Which colourmap to use
+    interpolation : str, optional
+        Allows interpolation so low res images don't look so blocky
+
+    Returns
+    -------
+    png image object
+        Object ready to be passed directly to the frontend
+    """
+    with mpl.rc_context({'backend': 'Agg'}):
+        #print(arr.shape)
+        if len(arr.shape)==2:
+            # if greyscale plot just that
+            fig = plt.figure(figsize=(1, 1), dpi=4 * arr.shape[1])
+            ax = plt.Axes(fig, [0., 0., 1., 1.])
+            ax.set_axis_off()
+            fig.add_axes(ax)
+            plt.imshow(arr, cmap=plot_cmap, origin='lower',
+                    interpolation=interpolation)
+            output = io.BytesIO()
+            FigureCanvas(fig).print_png(output)
+            plt.close(fig)
+        else:
+            #if 3 bands plot r band and rgb
+            fig = plt.figure(figsize=(1, 1), dpi=6 * arr.shape[1])
+            
+            plt.imshow(make_rgb.make_rgb_one_image(arr, return_img=True),
+                       cmap=plot_cmap, origin='lower', interpolation=interpolation)
+            plt.axis('off')
+            output = io.BytesIO()
+            FigureCanvas(fig).print_png(output)
+            plt.close(fig)
 
 class KiDSDatasetloader(Dataset):
 
-
-    '''
-    
-    it returns numoy array
-    
-    '''
-    def __init__(self, kids_id_list, 
-                 kids_tile_list, 
+    def __init__(self, kids_id_list=None, 
+                 kids_tile_list=None, 
                  checkpoint_path = None, 
                  channels = None,
                  path_dat = settings.path_to_save_imgs,
                  apply_preproc=True, 
-                 transform=None,labels=None):
+                 transform=None,labels=None,
+                 display_interpolation=None,):
         
+        self.display_interpolation = display_interpolation
+        self.df_kids = pd.read_csv(os.path.join(usr, 'data/table_all_checked.csv'))
         self.path_dat = path_dat
-        self.kids_id_list = kids_id_list
-        self.kids_tile_list = kids_tile_list
-        self.channels = channels
-        self.checkpoint_path = checkpoint_path
+        
+        # Assign default values if parameters are None
+        self.kids_id_list = kids_id_list if kids_id_list is not None else self.df_kids['KIDS_ID'].values
+        self.kids_tile_list = kids_tile_list if kids_tile_list is not None else self.df_kids['KIDS_TILE'].values
+        self.channels = channels if channels is not None else ['r', 'i', 'g']
+        self.checkpoint_path = checkpoint_path if checkpoint_path is not None else os.path.join(usr,'data')
         self.apply_preproc = apply_preproc
         self.transform = transform
-        self.data =  self.dataset_to_rgb()
-        self.labels = labels
+        self.labels = labels if labels is not None else self.df_kids['LABEL'].values
+        
+        self.data = self.dataset_to_rgb()
+        self.data_type = 'image'
+        self.metadata = self.get_metadata()
+        self.index = self.metadata.index.values
+
+
+
+    def get_metadata(self,):
+        
+        if 'ID' not in self.df_kids.columns and 'KIDS_TILE' in self.df_kids.columns :
+            self.df_kids.rename(columns={"ID": "KIDS_ID"}, inplace=True)
+        elif 'KIDS_ID' in self.df_kids.columns and 'KIDS_TILE'in self.df_kids.columns:
+            pass
+        else:
+            raise ValueError('Dataframe with columns ID or KIDS_ID and KIDS_TILE needed')
+
+        #if 'FOLDER' not in self.df_kids.columns:
+        #    raise ValueError('Dataframe with images path needed (FOLDER column)')
+
+        if 'LABEL' in  self.df_kids.columns:
+            pass
+        else:
+            self.df_kids['LABEL'] = np.ones(len(self.df_kids))*-1
+
+        #label from active learning
+        if 'LABEL_AL' in  self.df_kids.columns:
+            pass
+        else:
+            self.df_kids['LABEL_AL'] = np.ones(len(self.df_kids))*-1
+        
+        inds =  self.df_kids['KIDS_ID'].values
+        self.df_kids['filename'] = [tile +'__'+ id for id,tile in zip(self.df_kids['KIDS_ID'].values,self.df_kids['KIDS_TILE'].values)]
+
+        #self.df_kids = self.df_kids.drop_duplicates(subset='KIDS_ID').reset_index(drop=True)
+        print(self.df_kids.head())
+        self.metadata = self.df_kids.set_index(inds)
+        return self.metadata
+
+    
+
+    def get_sample(self, idx):
+        """
+        Returns the data for a single sample in the dataset as indexed by idx.
+
+        Parameters
+        ----------
+        idx : string
+            Index of sample
+
+        Returns
+        -------
+        nd.array
+            Array of image cutout
+        """
+
+        return self.data[int(idx)]
+
+    def get_display_data(self, idx):
+
+        return convert_array_to_image(self.data[int(idx)], interpolation=self.display_interpolation)
+
+
       
 
     def load_image(self, i):
@@ -157,7 +273,7 @@ class KiDSDatasetloader(Dataset):
         else:
             #it doesnt exist
             if os.path.exists(os.path.exists(os.path.join(self.checkpoint_path,'all_imgs.npz'))):
-                    print('RGB images not found')
+                    print(f'RGB images not found in {checkpoint_file}')
                     data_ugr = self.create_dataset()
                     print('Dataset to rgb')
                     data = []

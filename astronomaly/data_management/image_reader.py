@@ -19,36 +19,12 @@ import make_rgb
 mpl.use('Agg')
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas  # noqa: E402, E501
 import matplotlib.pyplot as plt  # noqa: E402
+import pickle
 
 def change_specialcharacters(string):
     return string.replace('KIDS', 'KiDS_DR4.0').replace('.', 'p').replace('-', 'm').rstrip(' ')
 
-'''
-def from_fits_to_array(folder_path, img_ID, tile_ID, channels=['r','i','g'] ):
 
-    img=[]
-
-    tile_ID = change_specialcharacters(tile_ID)
-    if len(channels)==1:
-        channels=[channels]
-    for f in channels:
-        try:
-            hdu = fits.getdata(os.path.join(folder_path,f+'_band','tile_'+tile_ID, img_ID+'.fits' ),
-                                memmap=True)
-        except FileNotFoundError:
-            try:
-                hdu = fits.getdata(os.path.join(folder_path,f+'_band',tile_ID, img_ID+'.fits') ,
-                                memmap=True)
-            except:
-                print(tile_ID,img_ID)
-                continue
-                
-        img.append(hdu)
-    #wcs = WCS(hdu.header)
-        #print(img)
-
-    return np.array(img)
-'''
 def convert_array_to_image(arr, plot_cmap='viridis', interpolation='bicubic'):
     """
     Function to convert an array to a png image ready to be served on a web
@@ -70,44 +46,48 @@ def convert_array_to_image(arr, plot_cmap='viridis', interpolation='bicubic'):
     """
     with mpl.rc_context({'backend': 'Agg'}):
         #print(arr.shape)
-        if len(arr.shape)==2:
+        #if len(arr.shape)==2:
             # if greyscale plot just that
-            fig = plt.figure(figsize=(1, 1), dpi=4 * arr.shape[1])
-            ax = plt.Axes(fig, [0., 0., 1., 1.])
-            ax.set_axis_off()
-            fig.add_axes(ax)
-            plt.imshow(arr, cmap=plot_cmap, origin='lower',
-                    interpolation=interpolation)
-            output = io.BytesIO()
-            FigureCanvas(fig).print_png(output)
-            plt.close(fig)
+        fig = plt.figure(figsize=(1, 1), dpi=4 * arr.shape[1])
+        ax = plt.Axes(fig, [0., 0., 1., 1.])
+        ax.set_axis_off()
+        fig.add_axes(ax)
+        plt.imshow(arr, cmap=plot_cmap, origin='lower',
+                interpolation=interpolation)
+        output = io.BytesIO()
+        FigureCanvas(fig).print_png(output)
+        plt.close(fig)
+        '''
         else:
             #if 3 bands plot r band and rgb
             fig = plt.figure(figsize=(1, 1), dpi=6 * arr.shape[1])
             
-            '''
-            ax1 = fig.add_subplot(1, 2, 1)
+            
+            #code to have more than one image shown
+            #ax1 = fig.add_subplot(1, 2, 1)
             #r band #np.rot90(arr[:,:,0]),
-            ax1.imshow(arr[:,:,0], 
-                       cmap=plot_cmap, origin='lower', interpolation=interpolation)
-            ax1.set_axis_off()
-            ax2 = fig.add_subplot(1, 2, 2)
+            #ax1.imshow(arr[:,:,0], 
+            #            cmap=plot_cmap, origin='lower', interpolation=interpolation)
+            #ax1.set_axis_off()
+            #ax2 = fig.add_subplot(1, 2, 2)
             #rgb
-            #ax2.imshow(make_rgb.make_rgb_one_image(arr),
-                      # cmap=plot_cmap, origin='lower', interpolation=interpolation)
-            ax2.imshow(make_rgb.make_rgb_one_image(arr, return_img=True),
-                       cmap=plot_cmap, origin='lower', interpolation=interpolation)
-            #np.save('/Users/mrgr/Documents/GitHub/KiDS_astronomaly/rgb.npy',make_rgb.make_rgb_one_image(arr))
-            #print(np.shape(make_rgb.make_rgb_one_image(arr)))
-            ax2.set_axis_off()
-            '''
-            plt.imshow(make_rgb.make_rgb_one_image(arr, return_img=True),
-                       cmap=plot_cmap, origin='lower', interpolation=interpolation)
+            #ax2.imshow(make_rgb.make_rgb_one_image(arr, return_img=True),
+            #            cmap=plot_cmap, origin='lower', interpolation=interpolation)
+            #ax2.set_axis_off()
+            
+            ## code ot use if you load more channels:
+            #plt.imshow(make_rgb.make_rgb_one_image(arr, return_img=True),
+            #            origin='lower', interpolation=interpolation)
+
+            plt.imshow(arr)
+            print(arr)
             plt.axis('off')
             output = io.BytesIO()
             FigureCanvas(fig).print_png(output)
             plt.close(fig)
+        '''        
 
+    
 
 
     return output
@@ -874,7 +854,7 @@ class ImageThumbnailsDataset(Dataset):
                                  'fits', 'fits.fz', 'fits.gz', 'FITS',
                                  'FITS.fz', 'FITS.gz'
                                  ]
-
+        
         self.transform_function = transform_function
         self.check_corrupt_data = check_corrupt_data
 
@@ -916,6 +896,12 @@ class ImageThumbnailsDataset(Dataset):
                 self.metadata = pd.DataFrame(index=inds,
                                         data={'filename': file_paths})
         elif is_kids==True:
+
+            with open('/home/grespanm/github/data/image_data.pkl', 'rb') as file:
+                 self.df_img_kids = pickle.load(file)
+            
+            #pd.read_csv(os.path.join('/home/grespanm/github/data','table_all_checked_with_img.csv'))
+            #print(f"loaded df - { self.df_img_kids.loc[0,'image']}")
             '''
             if 'df_list_obj' in kwargs:
                 df_list_obj = kwargs['df_list_obj']
@@ -932,8 +918,8 @@ class ImageThumbnailsDataset(Dataset):
             #if 'list_of_files' not in df_list_obj.columns:
             #    raise ValueError('Dataframe with images path needed (list_of_files column)')
 
-            if 'FOLDER' not in df_kids.columns:
-                raise ValueError('Dataframe with images path needed (FOLDER column)')
+            #if 'FOLDER' not in df_kids.columns:
+            #    raise ValueError('Dataframe with images path needed (FOLDER column)')
 
             #file_paths = df_kids['FOLDER'].values
 
@@ -952,7 +938,7 @@ class ImageThumbnailsDataset(Dataset):
             inds =  df_kids['KIDS_ID'].values
             df_kids['filename'] = [tile +'__'+ id for id,tile in zip(df_kids['KIDS_ID'].values,df_kids['KIDS_TILE'].values)]
     
-            df_kids = df_kids.drop_duplicates(subset='KIDS_ID').reset_index(drop=True)
+            #df_kids = df_kids.drop_duplicates(subset='KIDS_ID').reset_index(drop=True)
             print(df_kids.head())
             self.metadata = df_kids.set_index(inds)
             #df_kids.to_csv(os.path.join('/Users/mrgr/Documents/GitHub/KiDS_astronomaly/example_data/KiDS_cutouts','aa.csv'), index=False)
@@ -976,6 +962,8 @@ class ImageThumbnailsDataset(Dataset):
         nd.array
             Array of image cutout
         """
+
+        print(f'get sample  {self.fits_format} and {(not self.is_kids)}')
 
         if self.fits_format and (not self.is_kids):
             try:
@@ -1006,7 +994,8 @@ class ImageThumbnailsDataset(Dataset):
                     print('Missing data: Enable check_corrupt_data.')
 
         elif self.fits_format and self.is_kids:
-            
+            '''
+            # code to load the fits  file for 3 channels
             try:    
                 img = from_fits_to_array(self.metadata.loc[idx, 'FOLDER'],
                             self.metadata.loc[idx,'KIDS_ID'] ,self.metadata.loc[idx, 'KIDS_TILE'],  
@@ -1020,14 +1009,18 @@ class ImageThumbnailsDataset(Dataset):
                 #print(np.shape(img))
                 #img = image_preprocessing.image_transform_greyscale(img) 
                 #print('load',np.shape(apply_transform(img.copy(), self.transform_function)))       
-                return apply_transform(img.copy(), self.transform_function)
             
             except FileNotFoundError:
                 print('File not found')
                 pass
             except ValueError:
                 print('Value error, the same of the img is', np.shape(img))
-
+            '''
+            #print('getting img from dataframe')
+            img =  self.df_img_kids[idx]
+            # self.metadata.loc[idx, 'image']
+            #print(img)
+            return apply_transform(img.copy(), self.transform_function)
         else:
             filename = self.metadata.loc[idx, 'filename']
             img = cv2.imread(filename)
@@ -1084,12 +1077,27 @@ class ImageThumbnailsDataset(Dataset):
                     #print('FOLDERRR',self.metadata.loc[idx, 'FOLDER'])
                     #print('FOLDERRR', self.metadata.loc[idx, 'KIDS_ID'] ,self.metadata.loc[idx, 'KIDS_TILE'])
                     #is img from kids, load it the correct  way 
+                    '''
+                    cutout =  self.df_img_kids.loc[idx, 'image'] 
+                    print(idx)
+                    print(type(cutout))
+                    print(cutout.shape)
+                    
                     img = from_fits_to_array(settings.path_to_save_imgs,
                         #self.metadata.loc[idx, 'FOLDER'],
                                 self.metadata.loc[idx, 'KIDS_ID'] ,self.metadata.loc[idx, 'KIDS_TILE'],  
                                 channels=['r', 'i','g'],  astronomaly=True)
                     #print(np.shape(img))
-                    cutout = np.transpose(img.copy(), (1,2,0))
+                    #cutout = np.transpose(img.copy(), (1,2,0))
+                    '''
+                    cutout =  self.df_img_kids[idx]
+
+                    #with open('/home/grespanm/github/data/image_data.pkl', 'rb') as file:
+                    #    df_img_kids = pickle.load(file)
+                    #df_img_kids
+
+            
+                    
             
         else:
             print('else')
@@ -1102,8 +1110,8 @@ class ImageThumbnailsDataset(Dataset):
             cutout = np.flip(cutout, axis=0)
 
         cutout = apply_transform(cutout, self.display_transform_function)
-        # print('dis',np.shape(cutout))
 
+       
         if self.display_image_size is None:
             self.display_image_size = max((cutout.shape[0], cutout.shape[1]))
 

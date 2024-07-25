@@ -70,7 +70,7 @@ if one_tile:
 
 else:
     df_list_obj= pd.read_csv(os.path.join(data_dir,'GAMA',
-                    'table_all_checked.csv')).drop_duplicates(subset='KIDS_ID').reset_index(drop=True)[:-1]
+                    'table_all_checked.csv')).drop_duplicates(subset='KIDS_ID').reset_index(drop=True)[:100]
     df_list_obj = df_list_obj
     df_list_obj['FOLDER'] = data_dir
 
