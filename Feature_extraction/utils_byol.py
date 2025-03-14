@@ -40,7 +40,7 @@ def run_pca(features, variance_threshold=0.98, use_scaler=False):
 def denoise_bilateral_img(img):
     return cv2.bilateralFilter(img, 9, 75, 75)
 
-def sigma_clipping_gray(img, sigma=2, central=True):
+def sigma_clipping_gray(img, sigma=2.5, central=True):
     """
     Applies sigma clipping to the grayscale version of an RGB image, fits contours, and masks out regions.
     The mask is then applied to the original RGB image.
@@ -101,7 +101,7 @@ def sigma_clipping_gray(img, sigma=2, central=True):
 
     return new_img
 
-def sigma_70pxsquare_clipping_gray(img, sigma=2, central=True):
+def sigma_70pxsquare_clipping_gray(img, sigma=2.5, central=True):
     """
     Applies sigma clipping to the grayscale version of an RGB image, fits contours, and masks out regions.
     The mask is then applied to the original RGB image.

@@ -1,6 +1,7 @@
 import sys
 #sys.path.append("/Users/mrgr/Documents/GitHub/KiDS_astronomaly/")
-sys.path.append('/home/grespanm/github/KiDS_astronomaly/')
+#sys.path.append('/home/grespanm/github/KiDS_astronomaly/')
+sys.path.append('/home/astrodust/mnt/github/KiDS_astronomaly/')
 
 from flask import Flask, render_template, request, Response
 import json

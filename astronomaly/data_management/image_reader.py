@@ -3,7 +3,7 @@ from astropy.wcs import WCS
 import sys
 sys.path.append('/home/grespanm/github/TEGLIE/teglie_scripts/')
 import settings
-from utils import from_fits_to_array
+#from utils import from_fits_to_array
 import numpy as np
 import os
 import tracemalloc
@@ -20,6 +20,7 @@ mpl.use('Agg')
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas  # noqa: E402, E501
 import matplotlib.pyplot as plt  # noqa: E402
 import pickle
+import h5py
 
 def change_specialcharacters(string):
     return string.replace('KIDS', 'KiDS_DR4.0').replace('.', 'p').replace('-', 'm').rstrip(' ')
@@ -897,8 +898,10 @@ class ImageThumbnailsDataset(Dataset):
                                         data={'filename': file_paths})
         elif is_kids==True:
 
-            with open('/home/grespanm/github/data/image_data.pkl', 'rb') as file:
-                 self.df_img_kids = pickle.load(file)
+            #this works for the teglie subset, for bigger dataset i cant load them all together
+            if False:
+                with open('/home/grespanm/github/data/image_data.pkl', 'rb') as file:
+                    self.df_img_kids = pickle.load(file)
             
             #pd.read_csv(os.path.join('/home/grespanm/github/data','table_all_checked_with_img.csv'))
             #print(f"loaded df - { self.df_img_kids.loc[0,'image']}")
@@ -908,12 +911,15 @@ class ImageThumbnailsDataset(Dataset):
             else: 
                 raise ValueError('Dataframe with objects (ID and KIDS_TILE) needed')
             '''
-            if 'ID' not in df_kids.columns and 'KIDS_TILE' in df_kids.columns :
+            if 'ID' in df_kids.columns and 'KIDS_TILE' in df_kids.columns:
                 df_kids.rename(columns={"ID": "KIDS_ID"}, inplace=True)
-            elif 'KIDS_ID' in df_kids.columns and 'KIDS_TILE'in df_kids.columns:
+            elif 'KIDS_ID' in df_kids.columns and 'KIDS_TILE' in df_kids.columns:
                 pass
             else:
-                raise ValueError('Dataframe with columns ID or KIDS_ID and KIDS_TILE needed')
+                print("DataFrame columns:", df_kids.columns.tolist())
+                print(df_kids.head())
+                raise ValueError('Dataframe must have columns "ID" (or "KIDS_ID") and "KIDS_TILE".')
+
             
             #if 'list_of_files' not in df_list_obj.columns:
             #    raise ValueError('Dataframe with images path needed (list_of_files column)')
@@ -939,7 +945,7 @@ class ImageThumbnailsDataset(Dataset):
             df_kids['filename'] = [tile +'__'+ id for id,tile in zip(df_kids['KIDS_ID'].values,df_kids['KIDS_TILE'].values)]
     
             #df_kids = df_kids.drop_duplicates(subset='KIDS_ID').reset_index(drop=True)
-            print(df_kids.head())
+            #print(df_kids.head())
             self.metadata = df_kids.set_index(inds)
             #df_kids.to_csv(os.path.join('/Users/mrgr/Documents/GitHub/KiDS_astronomaly/example_data/KiDS_cutouts','aa.csv'), index=False)
                 
@@ -1090,7 +1096,36 @@ class ImageThumbnailsDataset(Dataset):
                     #print(np.shape(img))
                     #cutout = np.transpose(img.copy(), (1,2,0))
                     '''
-                    cutout =  self.df_img_kids[idx]
+                    hdf5_file_path_1 = '/home/grespanm/github/data/dr4_cutouts.h5' if os.path.exists('/home/grespanm/github/data/dr4_cutouts.h5') else '/home/astrodust/mnt/github/data/dr4_cutouts.h5'
+                    hdf5_file_path_2 = '/home/grespanm/github/data/dr4_cutouts_2.h5' if os.path.exists('/home/grespanm/github/data/dr4_cutouts_2.h5') else '/home/astrodust/mnt/github/data/dr4_cutouts_2.h5'
+
+                    kids_ids_file_1 = '/home/grespanm/github/data/dr4_cutoutsKIDS_ID_1.txt' if os.path.exists('/home/grespanm/github/data/dr4_cutoutsKIDS_ID_1.txt') else '/home/astrodust/mnt/github/data/dr4_cutoutsKIDS_ID_1.txt'
+                    kids_ids_file_2 = '/home/grespanm/github/data/dr4_cutoutsKIDS_ID_2.txt' if os.path.exists('/home/grespanm/github/data/dr4_cutoutsKIDS_ID_2.txt') else '/home/astrodust/mnt/github/data/dr4_cutoutsKIDS_ID_2.txt'
+
+
+                    # Load IDs from the text files into sets
+                    with open(kids_ids_file_1, 'r') as f:
+                        ids_set_1 = set(line.strip() for line in f)
+
+                    with open(kids_ids_file_2, 'r') as f:
+                        ids_set_2 = set(line.strip() for line in f)
+
+
+                    # Check the first file
+                    cutout = None
+                    if idx in ids_set_1:
+                        with h5py.File(hdf5_file_path_1, 'r') as hdf5_file:
+                            if idx in hdf5_file:
+                                cutout = hdf5_file[idx][:]
+
+                    # Check the second file if not found
+                    if cutout is None and idx in ids_set_2:
+                        with h5py.File(hdf5_file_path_2, 'r') as hdf5_file:
+                            if idx in hdf5_file:
+                                cutout = hdf5_file[idx][:]    
+
+                    #this works with the pickle file 
+                    #cutout =  self.df_img_kids[idx]
 
                     #with open('/home/grespanm/github/data/image_data.pkl', 'rb') as file:
                     #    df_img_kids = pickle.load(file)

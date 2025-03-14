@@ -1,22 +1,29 @@
 import sys
+import os
 #import faulthandler
 #faulthandler.enable()
 import warnings
 warnings.filterwarnings("ignore")
 
+user = os.path.expanduser("~") 
 
-sys.path.append('/home/grespanm/github/TEGLIE/teglie_scripts/')
-sys.path.append('/home/grespanm/github/KiDS_astronomaly/')
+if 'home/grespanm' in user:
+    base_path = os.path.join(user, 'github')
+elif 'home/astrodust' in user:
+    base_path = os.path.join(user, 'mnt','github') 
+
+sys.path.append(f'{base_path}/TEGLIE/teglie_scripts/')
+sys.path.append(f'{base_path}/KiDS_astronomaly/')
 import preprocessing
 from astronomaly.data_management import image_reader
 from astronomaly.preprocessing import image_preprocessing
-from astronomaly.feature_extraction import shape_features, pretrained_cnn
+#from astronomaly.feature_extraction import shape_features, pretrained_cnn
 from astronomaly.postprocessing import scaling
 from astronomaly.anomaly_detection import isolation_forest, gaussian_process, human_loop_learning
 from astronomaly.visualisation import umap_plot
 from astronomaly.visualisation import tsne_plot
 
-import os
+
 import pandas as pd
 import zipfile
 import make_rgb 
@@ -26,23 +33,30 @@ import numpy as np
 import glob
 import sys
 
-sys.path.append('/home/grespanm/github/KiDS_astronomaly/Feature_extraction/')
-sys.path.append('/home/grespanm/github/KiDS_astronomaly/Feature_extraction/Features/backbone/')
+
+
+sys.path.append(f'{base_path}/KiDS_astronomaly/Feature_extraction/')
+sys.path.append(f'{base_path}/KiDS_astronomaly/Feature_extraction/Features/backbone/')
 
 from run_byol import BYOLTEGLIETest
 import utils_byol
 
 from datasetkids import KiDSDatasetloader
 
+np.random.seed(42)
+
 byol_test = BYOLTEGLIETest()
 
 
 # Root directory for data
-data_dir = settings.path_to_save_imgs
+data_dir = '/home/astrodust/mnt/Data/KiDS_cutouts/GAMA_astronomaly_output'
+ #'/home/grespanm/Data/KiDS_cutouts/GAMA_astronomaly_output'
+#'/home/grespanm/github/KiDS_astronomaly/test_scripting_astronomaly/'
+#settings.path_to_save_imgs
 is_kids = True
 
 
-df_list_obj= pd.read_csv(os.path.join('/home/grespanm/github/data','table_all_checked.csv'))
+#print(df_list_obj.head())
 #df_list_obj['FOLDER'] = data_dir
 
 ## features info 
@@ -50,30 +64,27 @@ dim_reduction = 'pca'
 feature_method = 'byol'
 #model_choice =  'Resnet18' 
 
-variance = 0.98
+variance = 0.95
 image_prep = 'sigmaclip_gray'
 
 
 ### GP info
 AL_model =  'GP'
-ei_tradeoff = 2
 
 img_prep_list = []
-force_rerun=False
+force_rerun=True
 vis= 'umap'
-protege = 'kids'
-batch = 200
+protege = 'protege'
+ei_tradeoff = 2
+batch = 500
 score = 'acquisition'
 
-
-#_batches_{batch}_score_{score}
-
-print(img_prep_list) 
 # Where output should be stored
-output_dir = os.path.join(
-    data_dir, 'GAMA_astronomaly_output',
-    f'GAMA{"_".join(img_prep_list)}_dimred_{dim_reduction}_var_{variance}_prepbefore_{image_prep.replace("_", "")}_{AL_model}_tradeoff_{ei_tradeoff}_old', '')
+output_dir = os.path.join( data_dir, f'51kGAMA{protege}{"_".join(img_prep_list)}_dimred_{dim_reduction}_var_{variance}_prepbefore_{image_prep.replace("_", "")}_{AL_model}_tradeoff_{ei_tradeoff}_batches_{batch}_score_{score}', '')
 
+  # data_dir, 'GAMA_astronomaly_output',
+   # f'51k_GAMA{"_".join(img_prep_list)}_dimred_{dim_reduction}_var_{variance}_prepbefore_{image_prep.replace("_", "")}_{AL_model}_tradeoff_{ei_tradeoff}_batches_{batch}_score_{score}', '')
+print(output_dir)
 
 if not os.path.exists(output_dir):
     os.makedirs(output_dir)
@@ -81,7 +92,10 @@ if not os.path.exists(output_dir):
 
 ############ creeate pca extracted features file to load
 
-path_FE = '/home/grespanm/github/KiDS_astronomaly/Feature_extraction/FE_results'
+path_FE = f'{base_path}/KiDS_astronomaly/Feature_extraction/FE_results'
+#%%%%%%%%%%%%%%%%%%%
+
+df_list_obj= pd.read_csv(os.path.join(base_path ,'KiDS_astronomaly/final_labels_corrected_coord.csv'))
 name_features = f'features&labels_prepbefore_[{image_prep}]_PCA_var_{variance}_scaler_False'
 
 felab = np.load(os.path.join(path_FE, name_features+'.npz'))
@@ -160,7 +174,7 @@ def run_pipeline():
             ### feature selection
         
             ft,lb = byol_test.run_feature_extractor(variance_threshold=0.98, preprocessing_after_byol = [utils_byol.sigma_clipping_gray]   )
-            idx = pd.read_csv('/home/grespanm/github/data/table_all_checked.csv')['KIDS_ID'].values
+            idx = pd.read_csv(f'{base_path}/data/table_all_checked.csv')['KIDS_ID'].values
             #get_features(os.path.join(byol_test, file_path))
             features = pd.DataFrame(data=ft, index = idx)
 
@@ -178,6 +192,7 @@ def run_pipeline():
     if True:
         #### Protege
         # Initial sort using PCA
+        print('protege')
         initial_steps = 10
         sorted_features = features.sort_values(features.columns[0])
         selected_inds = np.linspace(
@@ -192,7 +207,7 @@ def run_pipeline():
 
     if False:
         sorted_features = features.sort_values(features.columns[0])
-        df_hq_kids = pd.read_csv('/home/grespanm/github/data/kids_in_all_checked.csv')
+        df_hq_kids = pd.read_csv(f'{base_path}/data/kids_in_all_checked.csv')
         selected_inds = df_hq_kids['KIDS_ID_1']
         anomalies = pd.DataFrame(
             [0]*len(sorted_features),
@@ -222,8 +237,8 @@ def run_pipeline():
         pipeline_score_converter = human_loop_learning.ScoreConverter(
             force_rerun=force_rerun, output_dir=output_dir)
         anomalies = pipeline_score_converter.run(anomalies)
-
-    if True:
+    # change tthis if you want to open a previous session
+    if False:
         try:
             # This is used by the frontend to store labels as they are applied so
             # that labels are not forgotten between sessions of using Astronomaly
@@ -245,7 +260,7 @@ def run_pipeline():
                 print(f"{(anomalies.human_label!=-1).sum()} labels added")
                 
         except FileNotFoundError:
-            print('exception')
+            print('ml_scores.csv file not found`')
             pass
 
     # This is the active learning object that will be run on demand by the

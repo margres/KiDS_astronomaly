@@ -12,6 +12,13 @@ __pycache__/
 *.html
 *.pdf
 *$py.class
+*.csv
+*.h5
+*.npz
+*.parquet
+*txt
+*pickle
+
 
 # C extensions
 *.so

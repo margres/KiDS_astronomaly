@@ -34,6 +34,7 @@ import random
 import copy
 from utils_byol import *
 import time
+import matplotlib.pyplot as plt
 
 # Set random seed for reproducibility
 def set_seed(seed):
@@ -50,11 +51,6 @@ def set_seed(seed):
 
 # Dynamically resolve the base path for the user
 base_path = os.path.expanduser("~")  # Automatically resolves to '/home/<user>' or '/users/<user>'
-
-
-# if 'home' in base_path:
-#     base_path = '/home/astrodust/mnt/github/'
-#     #os.path.join(base_path,'mnt', 'github')
 
 ## different paths in different machines
 if 'home/grespanm' in base_path:
@@ -107,7 +103,7 @@ class BYOLTEGLIETest:
                 normalize_to_imagenet = True,
                 epochs =50,
                 seed= 42,
-                implement_patience=False,
+                implement_patience=False, 
                 model_name = None
                 ):
         """
@@ -177,7 +173,7 @@ class BYOLTEGLIETest:
     def generate_clean_name(self, preprocessing_steps, var, scaler):
         preprocessing_names = [function_name_mapping[func] for func in preprocessing_steps]
         preprocessing_str = ','.join(preprocessing_names)
-        return f'seed_5_{self.dataset_name}_features&labels_prepbefore_[{preprocessing_str}]_PCA_var_{var}_scaler_{scaler}.npz'
+        return f'{self.dataset_name}_features&labels_prepbefore_[{preprocessing_str}]_PCA_var_{var}_scaler_{scaler}.npz'
 
 
     def debug_dataloader(self):
@@ -382,119 +378,7 @@ class BYOLTEGLIETest:
         
         if return_data:
             return  DataLoader(self.transformed_dataset, batch_size=self.batch_size, shuffle=False, pin_memory=False)
-        
-    
-    # def extract_features(self, loader, model, preprocessing_after_byol= None ):
-         
-    #     rep = []
-    #     labels = []
-
-    #     # batch_size = loader.batch_size if loader.batch_size is not None else 1
-
-    #     if preprocessing_after_byol is None:
-    #         preprocessing_after_byol = self.preprocessing_after_byol
-
-    #     with torch.no_grad():
-    #         for image, label in loader:
-    #             #### here preprocessing before feature extraction
-    #             if preprocessing_after_byol is not None:
-    #                 image_tmp = image.cpu().numpy().copy()
-    #                 print(np.shape(image))
-    #                 print(np.shape(image_tmp))
-    #                 for p in preprocessing_after_byol:
-    #                     image_tmp = p(image_tmp) 
-    #                 image = image_tmp
-    #             rep.append(model(image, return_embedding=True)[1])
-    #             labels.append(label)
-        
-
-    #     # Unwrapping the data
-    #     rep_tmp = []
-    #     label_tmp = []
-
-    #     for i in range(len(rep)):
-    #         for j in range(len(rep[i])):
-    #             rep_tmp.append(rep[i][j].cpu().numpy())
-    #             label_tmp.append(labels[i][j].item())
-
-    #     rep = rep_tmp
-    #     labels = label_tmp
-
-    #     return rep, labels
-
-    # def extract_features(self, data_loader, learner):
-    #     """
-    #     Extracts features from the data loader and applies preprocessing.
-
-    #     Parameters:
-    #         data_loader: PyTorch DataLoader object.
-    #         learner: Model used for feature extraction.
-
-    #     Returns:
-    #         Extracted feature set and labels.
-    #     """
-    #     imgs_test, labels_test = [], []
-    #     device = next(learner.parameters()).device  # Get the device of the model
-
-    #     total_batches = len(data_loader)
-
-    #     # Iterate over batches with progress bar
-    #     for batch_idx, batch in enumerate(tqdm(data_loader, desc="Extracting Features", unit="batch", total=total_batches)):
-    #         images, labels = batch  # Unpack batch
-
-    #         batch_features = []
-    #         batch_labels = []
-
-    #         # Iterate over each image in the batch
-    #         for i in range(len(images)):  
-    #             img = images[i].to(device)  # Send image to model's device
-    #             label = labels[i]
-
-    #             img_np = img.cpu().numpy()  # Convert to NumPy
-    #             print(np.shape(img_np))
-    #             # Apply sigma clipping only if image has 3 channels
-    #             if img_np.shape[0] == 3:  
-    #                 # If the first dimension is 3 or less, assume (C, H, W) format
-    #                 if img_np.shape[0] <= 4:  
-    #                     img_np = np.transpose(img_np, (1, 2, 0))  # Convert (C, H, W) → (H, W, C) for sigma clipping
-    #                     print(f'Before Sigma Clip: {np.shape(img_np)}')
-
-
-    #                 img_np = sigma_clipping_gray(img_np)  
-    #                 print(f'After Sigma Clip: {np.shape(img_np)}')
-
-    #                 # Convert back to (C, H, W) format for ResNet
-    #                 img_np = np.transpose(img_np, (2, 0, 1))  
-    #                 print(f'After Transpose Back for ResNet: {np.shape(img_np)}')
-
-    #             # Convert back to tensor and add batch dimension for ResNet
-    #             img_tensor = torch.tensor(img_np, dtype=torch.float32).unsqueeze(0).to(device)
                 
-    #             print(f'After Transpose Back for ResNet: {np.shape(img_tensor)}')
-
-    #             # Extract features using the learner (ResNet)
-    #             with torch.no_grad():
-    #                 features = learner(img_tensor)  # Forward pass
-
-    #             print(f'Features Extracted Shape: {features.shape}')
-
-    #             batch_features.append(features.cpu().numpy())  # Convert to NumPy and store
-    #             batch_labels.append(label.cpu().numpy())
-
-    #         imgs_test.extend(batch_features)
-    #         labels_test.extend(batch_labels)
-
-    #     # Convert lists to NumPy arrays and reshape appropriately
-    #     imgs_test = np.array(imgs_test).reshape(len(imgs_test), -1)
-    #     labels_test = np.array(labels_test).flatten()
-
-    #     print(f"Final Extracted Features Shape: {imgs_test.shape}")
-    #     print(f"Final Labels Shape: {labels_test.shape}")
-
-    #     return imgs_test, labels_test
-    import matplotlib.pyplot as plt
-
-        
 
     
     def plot_data(self, data, index):
@@ -681,8 +565,7 @@ class BYOLTEGLIETest:
                     'optimizer_state_dict': opt.state_dict(),
                 }
                 counter =0
-                print(f'New Best Model!! \n Epoch {self.epoch_start} model saved at {os.path.join(self.path_models, "best_" + self.model_name + ".pt")} ')\
-                torch.save(checkpoint_data, os.path.join(self.path_models, "best_" + self.model_name + ".pt"))
+                print(f'New Best Model!! \n Epoch {self.epoch_start} model saved at {os.path.join(self.path_models, "best_" + self.model_name + ".pt")} ')
             else:
                 counter+=1
 
@@ -707,7 +590,7 @@ class BYOLTEGLIETest:
                 'optimizer_state_dict': opt.state_dict(),
             }, os.path.join(self.path_models, self.model_name + ".pt"))
 
-            
+            torch.save(checkpoint_data, os.path.join(self.path_models, "best_" + self.model_name + ".pt"))
             print(f'Epoch {self.epoch_start} model saved at {os.path.join(self.path_models, "best_" + self.model_name + ".pt")} ')
             pca_results = self.run_feature_extractor(best_model=False, save=False, load_weights=True, variance_threshold=self.variance_threshold)
             pca_shape = pca_results.shape[1]
@@ -897,8 +780,8 @@ class BYOLTEGLIETest:
             raise ValueError("DataLoader is empty! No batches available for feature extraction.")
 
         # Iterate over batches with progress bar
-        #for batch_idx, (images, labels) in enumerate(tqdm(data_loader, desc="Extracting Features", unit="batch")):
-        for batch_idx, (images, labels) in enumerate(data_loader):
+        for batch_idx, (images, labels) in enumerate(tqdm(data_loader, desc="Extracting Features", unit="batch")):
+        #for batch_idx, (images, labels) in enumerate(data_loader):
             images = images.to(device)  # Move batch to device
             labels = labels.to(device)
 
@@ -908,13 +791,13 @@ class BYOLTEGLIETest:
             if batch_size == 0:
                 print(f"Warning: Batch {batch_idx+1} is empty! Skipping...")
                 continue  # Skip empty batches
-
-            # Apply sigma clipping if needed
-            if images.shape[1] == 3:  # Ensure 3 channels (C, H, W)
-                images_np = images.cpu().numpy().transpose(0, 2, 3, 1)  # (B, C, H, W) → (B, H, W, C)
-                images_np = np.array([sigma_clipping_gray(img) for img in images_np])  # Apply sigma clipping
-                images_np = images_np.transpose(0, 3, 1, 2)  # (B, H, W, C) → (B, C, H, W)
-                images = torch.tensor(images_np, dtype=torch.float32).to(device)
+            # if 'sigma' in preprocessing_after_byol :
+            #     # Apply sigma clipping if needed
+            #     if images.shape[1] == 3:  # Ensure 3 channels (C, H, W)
+            #         images_np = images.cpu().numpy().transpose(0, 2, 3, 1)  # (B, C, H, W) → (B, H, W, C)
+            #         images_np = np.array([sigma_clipping_gray(img) for img in images_np])  # Apply sigma clipping
+            #         images_np = images_np.transpose(0, 3, 1, 2)  # (B, H, W, C) → (B, C, H, W)
+            #         images = torch.tensor(images_np, dtype=torch.float32).to(device)
 
             # Extract features using the learner (ResNet)
             
@@ -981,7 +864,7 @@ class BYOLTEGLIETest:
                 print('Features not found - running feature extraction...')
             try:
                 assert self.tot_dataset is not None
-            except:
+            except: 
                 # Prepare the dataset
                 self.prepare_dataset(
                     path_npz_rgb=path_npz_rgb, 
@@ -989,7 +872,7 @@ class BYOLTEGLIETest:
                     kids_tile_list=kids_tile_list,
                     channels=channels
                 )
-            tot_loader = self.tot_dataset
+                tot_loader = self.tot_dataset
 
             # Extract features and labels
             features, labels = self.extract_features(tot_loader, model)
@@ -1269,7 +1152,7 @@ class BYOLTEGLIETest:
 
             
 
-    def compute_pca_incrementally(self, file_paths, n_components=0.98, batch_size=5000, output_folder="pca_results"):
+    def compute_pca_incrementally(self, file_paths, n_components=0.99, batch_size=5000, output_folder="pca_results"):
         """
         Compute PCA incrementally over multiple files to avoid memory overflow.
 
@@ -1334,7 +1217,7 @@ if __name__ == "__main__":
     
 
     preprocessing_after_byol = [sigma_clipping_gray] 
-    for seed in [2]:#range(1,6):
+    for seed in [1]:#range(1,6):
         set_seed(seed)
         
     
@@ -1343,72 +1226,28 @@ if __name__ == "__main__":
             base_path = os.path.join(base_path, 'github')
         elif 'home/astrodust' in base_path:
             base_path = os.path.join(base_path, 'mnt','github')
-        file_path = os.path.join(base_path, "data/BGcut_TEGLIE_subsample.csv")
-        # file_path = os.path.join(base_path, "data/BGcut_TEGLIE_subsample.csv")
-        
+
+        #file_path = os.path.join(base_path, "data/big_dataframe.parquet")
+        file_path = os.path.join(base_path, 'data/BGcut_TEGLIE_subsample.csv')
+        #npz = os.path.join(base_path, "data/dr4_cutouts.h5")
+        npz = os.path.join(base_path, 'data/BGcut_TEGLIE_subsample_cropped.npz')
+        model =  'bestmodel_101x101BGTEGLIE'
+        l_r =[1e-5]
+
+        # Determine the file type and load it correctly
+        ext = os.path.splitext(file_path)[1].lower()  # Get the file extension
+
+        if ext == ".parquet":
+            df = pd.read_parquet(file_path)
+        elif ext == ".csv":
+            df = pd.read_csv(file_path)
+        # df = df[len(df) // 2:]
+           
+
         print(f"🔹 File Path: {file_path}")
         # Check if the file exists
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"File not found: {file_path}")
-    
-        df = pd.read_csv(file_path)
-        
-        # if df is None:
-        #     raise ValueError
-            
-        # variance_threshold = 0.99
-        
-        # dataset_name = '101x101BGTEGLIE_deletelater'
-        # #load_saved_model = False
-        # path_npz_rgb = os.path.join(base_path, "data/BGcut_TEGLIE_subsample.npz")
-        # byol_test = BYOLTEGLIETest( tab_kids= df,
-        #                             preprocessing_after_byol = preprocessing_after_byol, 
-        #                              variance_threshold = variance_threshold, 
-        #                              path_npz_rgb = path_npz_rgb,
-        #                            dataset_name = dataset_name,
-        #                            #load_saved_model=load_saved_model,
-        #                            project_name= 'BYOL',
-        #                            l_r=3e-4
-        #                           )
-    
-        # # # Print Variable Values
-        # print(f"🔹 Preprocessing After BYOL: {preprocessing_after_byol}")
-        # print(f"🔹 Variance Threshold: {variance_threshold}")
-        # print(f"🔹 NPZ RGB Path: {path_npz_rgb}")
-        # print(f"🔹 Dataset Name: {dataset_name}")
-        
-        # byol_test.run_byol_training()
-        #byol_test.run_feature_extractor(best_model=False, load_weights=False )
-    
-        
-        ###########################################################################3
-        
-        # file_path_list = [os.path.join(base_path, "data/table_all_checked.csv"),
-        #                   os.path.join(base_path, "data/table_all_checked.csv"),
-        #                   os.path.join(base_path, "data/table_all_checked.csv"),
-        #                   os.path.join(base_path, "data/BGcut_TEGLIE_subsample.csv"),
-        #                  os.path.join(base_path, "data/BGcut_TEGLIE_subsample.csv")]
-    
-        # npz_list = [os.path.join(base_path, "data/all_imgs_RGB.npz"),
-        #                   os.path.join(base_path, "data/all_imgs_RGB.npz"),
-        #                   os.path.join(base_path, "data/all_imgs_RGB.npz"),
-        #                   os.path.join(base_path, "data/BGcut_TEGLIE_subsample_cropped.npz"),
-        #                  os.path.join(base_path, "data/BGcut_TEGLIE_subsample.npz")]
-    
-        # file_path_list = [  os.path.join(base_path, "data/BGcut_TEGLIE_subsample.csv"),
-        #                  os.path.join(base_path, "data/BGcut_TEGLIE_subsample.csv")]
-    
-        # npz_list = [ os.path.join(base_path, "data/BGcut_TEGLIE_subsample_cropped.npz"),
-        #                  os.path.join(base_path, "data/BGcut_TEGLIE_subsample.npz")]
-    
-    
-        # model_list = [ '101x101BGTEGLIE', '65x65BGTEGLIE']
-    
-        
-        file_path = os.path.join(base_path, "data/BGcut_TEGLIE_subsample.csv")
-        npz = os.path.join(base_path, "data/BGcut_TEGLIE_subsample_cropped.npz")
-        model =  '65x65'
-        l_r =[1e-5]
         
         #for file_path, model, npz in zip(file_path_list, model_list,npz_list):
         for l in l_r:
@@ -1416,8 +1255,6 @@ if __name__ == "__main__":
             # Check if the file exists
             if not os.path.exists(file_path):
                 raise FileNotFoundError(f"File not found: {file_path}")
-        
-            df = pd.read_csv(file_path)
             
             if df is None:
                 raise ValueError
@@ -1426,18 +1263,17 @@ if __name__ == "__main__":
             dataset_name = model
             load_saved_model = False
             path_npz_rgb = os.path.join(base_path, npz)
-            model_folder = 'models'
-            project_name = 'BYOL_lr_tests'
+            # model_folder = None   
+            project_name = 'BYOL_lr_tests64x64'
             continuation = False
             batch_size = 64
             preprocess_sigma_clipping = False
             normalize_to_imagenet = True
             change_last_layer =  False
             epochs=100
-            implement_patience = True
+            implement_patience = False
             model_name = 'Resnet18_64x64BGTEGLIE_lr_1e-05_batch_64_seed_1_2025-03-05_13-47'
-            
-            
+            # model_name = 'Resnet18_101x101BGTEGLIE_lr_1e-05_batch_64_seed_4_2025-03-01_14-22'
             start = time.time()
             byol_test = BYOLTEGLIETest( tab_kids= df,
                                         preprocessing_after_byol = preprocessing_after_byol, 
@@ -1446,7 +1282,7 @@ if __name__ == "__main__":
                                         dataset_name = dataset_name,
                                         load_saved_model=load_saved_model,
                                         l_r = l,
-                                        model_folder = model_folder,
+                                        # model_folder = model_folder,
                                         project_name= project_name,
                                         change_last_layer=change_last_layer,
                                         continuation=continuation,
@@ -1454,8 +1290,8 @@ if __name__ == "__main__":
                                         preprocess_sigma_clipping=preprocess_sigma_clipping,
                                         normalize_to_imagenet=normalize_to_imagenet,
                                         epochs =epochs,
-                                       seed = seed,
-                                       model_name = model_name
+                                        seed = seed,
+                                        model_name = model_name
                                       )
         
 
@@ -1467,7 +1303,7 @@ if __name__ == "__main__":
             print(f"🔹 Preprocessing After BYOL: {preprocessing_after_byol}")
             print(f"🔹 Variance Threshold: {variance_threshold}")
             print(f"🔹 Load Saved Model: {load_saved_model}")
-            print(f"🔹 Model folder: {model_folder}")
+            # print(f"🔹 Model folder: {model_folder}")
             print(f"🔹 Learning rate: {l}")
             print(f"🔹 Project name: {project_name}")
             print(f"🔹 Continuation: {continuation}")
@@ -1476,9 +1312,10 @@ if __name__ == "__main__":
             print(f"🔹 Change last layer: {change_last_layer}")        
             print(f"🔹 Seed: {seed}")
             print(f"🔹 Patience implemented: {implement_patience}")
+            print(f"🔹 Model name: {model_name}")
         
             
-            #byol_test.run_byol_training()
+            # byol_test.run_byol_training()
             stop = time.time()
             print(f'Running time {stop-start}')
             byol_test.run_feature_extractor(best_model=True, load_weights=True)

@@ -5,12 +5,16 @@ import warnings
 warnings.filterwarnings("ignore")
 
 
-sys.path.append('/home/grespanm/github/TEGLIE/teglie_scripts/')
-sys.path.append('/home/grespanm/github/KiDS_astronomaly/')
+#sys.path.append('/home/grespanm/github/TEGLIE/teglie_scripts/')
+#sys.path.append('/home/grespanm/github/KiDS_astronomaly/')
+
+sys.path.append('/home/astrodust/mnt/github/TEGLIE/teglie_scripts/')
+sys.path.append('/home/astrodust/mnt/github/KiDS_astronomaly/')
+
 import preprocessing
 from astronomaly.data_management import image_reader
 from astronomaly.preprocessing import image_preprocessing
-from astronomaly.feature_extraction import shape_features, pretrained_cnn
+#from astronomaly.feature_extraction import shape_features, pretrained_cnn
 from astronomaly.postprocessing import scaling
 from astronomaly.anomaly_detection import isolation_forest, gaussian_process, human_loop_learning
 from astronomaly.visualisation import umap_plot
@@ -26,8 +30,12 @@ import numpy as np
 import glob
 import sys
 
-sys.path.append('/home/grespanm/github/KiDS_astronomaly/Feature_extraction/')
-sys.path.append('/home/grespanm/github/KiDS_astronomaly/Feature_extraction/Features/backbone/')
+#sys.path.append('/home/grespanm/github/KiDS_astronomaly/Feature_extraction/')
+#sys.path.append('/home/grespanm/github/KiDS_astronomaly/Feature_extraction/Features/backbone/')
+
+
+sys.path.append('/home/astrodust/mnt/github/KiDS_astronomaly/Feature_extraction/')
+sys.path.append('/home/astrodust/mnt/github/KiDS_astronomaly/Feature_extraction/Features/backbone/')
 
 from run_byol import BYOLTEGLIETest
 import utils_byol
@@ -41,8 +49,8 @@ byol_test = BYOLTEGLIETest()
 data_dir = settings.path_to_save_imgs
 is_kids = True
 
-
-df_list_obj= pd.read_csv(os.path.join('/home/grespanm/github/data','table_all_checked.csv'))
+df_list_obj= pd.read_parquet(os.path.join('/home/astrodust/mnt/github/data','big_dataframe.parquet'))
+#df_list_obj= pd.read_parquet(os.path.join('/home/grespanm/github/data','big_dataframe.parquet'))
 #df_list_obj['FOLDER'] = data_dir
 
 ## features info 
@@ -50,7 +58,7 @@ dim_reduction = 'pca'
 feature_method = 'byol'
 #model_choice =  'Resnet18' 
 
-variance = 0.98
+variance = 0.95
 image_prep = 'sigmaclip_gray'
 
 
@@ -71,8 +79,8 @@ score = 'acquisition'
 print(img_prep_list) 
 # Where output should be stored
 output_dir = os.path.join(
-    data_dir, 'GAMA_astronomaly_output',
-    f'GAMA{"_".join(img_prep_list)}_dimred_{dim_reduction}_var_{variance}_prepbefore_{image_prep.replace("_", "")}_{AL_model}_tradeoff_{ei_tradeoff}_old', '')
+    data_dir, 'DR4_astronomaly_output',
+    f'DR4{"_".join(img_prep_list)}_dimred_{dim_reduction}_var_{variance}_prepbefore_{image_prep.replace("_", "")}_{AL_model}_tradeoff_{ei_tradeoff}', '')
 
 
 if not os.path.exists(output_dir):
@@ -81,21 +89,13 @@ if not os.path.exists(output_dir):
 
 ############ creeate pca extracted features file to load
 
-path_FE = '/home/grespanm/github/KiDS_astronomaly/Feature_extraction/FE_results'
-name_features = f'features&labels_prepbefore_[{image_prep}]_PCA_var_{variance}_scaler_False'
+path_FE = '/home/astrodust/mnt/github/KiDS_astronomaly/Feature_extraction/pca_results'
+name_features = f'combined_features_labels_0.95.npz'
 
-felab = np.load(os.path.join(path_FE, name_features+'.npz'))
+felab = np.load(os.path.join(path_FE, name_features), allow_pickle=True)
 
-pd.DataFrame(data= felab['features'], index =  df_list_obj['KIDS_ID'].values ).to_parquet(os.path.join(output_dir,'PCA_Decomposer_output.parquet'))
+pd.DataFrame(data= felab['features'], index =  felab['ids'] ).to_parquet(os.path.join(output_dir,'PCA_Decomposer_output.parquet'))
 
-
-'''
-if force_rerun==True and os.path.exists(glob.glob(os.path.join(output_dir,'*'))): 
-    # loop through the list and delete each file
-    for file_name in glob.glob(os.path.join(output_dir,'*')):
-        file_path = os.path.join(output_dir, file_name)
-        os.remove(file_path)
-'''
 
 
 # These are transform functions that will be applied to images before feature
@@ -148,30 +148,10 @@ def run_pipeline():
         # Define file path
         output_file_path = os.path.join(output_dir, 'PCA_Decomposer_output.parquet')
 
-        if os.path.exists(output_file_path):
-            # Load the features from the parquet file
-            features = pd.read_parquet(output_file_path)
-            print(f"Loaded features from {output_file_path} with shape {features.shape}")
+        # Load the features from the parquet file
+        features = pd.read_parquet(output_file_path)
+        print(f"Loaded features from {output_file_path} with shape {features.shape}")
 
-        else:
-            print(f"No file found at {output_file_path}. Running PCA pipeline...")
-
-
-            ### feature selection
-        
-            ft,lb = byol_test.run_feature_extractor(variance_threshold=0.98, preprocessing_after_byol = [utils_byol.sigma_clipping_gray]   )
-            idx = pd.read_csv('/home/grespanm/github/data/table_all_checked.csv')['KIDS_ID'].values
-            #get_features(os.path.join(byol_test, file_path))
-            features = pd.DataFrame(data=ft, index = idx)
-
-            # If the file does not exist, run the PCA pipeline
-            pipeline_pca = pca.PCA_Decomposer(force_rerun=force_rerun,
-                                            output_dir=output_dir,
-                                            threshold=1)
-            features = pipeline_pca.run(features)
-            # Save the features to a parquet file
-            features.to_parquet(output_file_path)
-            print(f"Features saved to {output_file_path}")
 
     print("Number of components:", features.shape[1])
 
@@ -211,17 +191,6 @@ def run_pipeline():
                                                     ascending=False).set_index('Unnamed: 0')[['score']]
             anomalies.index.name = None
         print(anomalies)
-
-    if False:
-        # Iforest pipeline object then running it
-        pipeline_iforest = isolation_forest.IforestAlgorithm(
-        force_rerun=True, output_dir=output_dir)
-        anomalies = pipeline_iforest.run(features)
-
-        # We convert the scores onto a range of 0-5
-        pipeline_score_converter = human_loop_learning.ScoreConverter(
-            force_rerun=force_rerun, output_dir=output_dir)
-        anomalies = pipeline_score_converter.run(anomalies)
 
     if True:
         try:
@@ -271,7 +240,7 @@ def run_pipeline():
             shuffle=False)
         
         print(np.shape(features))
-        vis_plot = pipeline_umap.run(features[:10])
+        vis_plot = pipeline_umap.run(features)
 
 
     # The run_pipeline function must return a dictionary with these keywords
